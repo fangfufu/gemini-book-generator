@@ -20,48 +20,193 @@ genai.configure(api_key=GOOGLE_API_KEY)
 # --- Book Structure Definition ---
 # Now allows chapters without sections
 book_structure = {
-    "Chapter 1: Introduction": [
-        "Section 1.1: What is Generative AI?",
-        "Section 1.2: History of Generative AI",
-        "Section 1.3: Applications of Generative AI"
+    "Acknowledgements": [],
+    "Foreword: The Veil of Ignorance": [],
+    "The Origin of the Saurian Lineage": [
+        "The Primordial Genesis: Extraterrestrial Seeding",
+        "The Evolutionary Divergence: Terraforming and Adaptation",
+        "The First Colonies: Pre-Human Civilizations",
+        "The Cataclysmic Shift: Subterranean Migration"
     ],
-    "Chapter 2: Advanced Techniques": [
-        "Section 2.1: Prompt Engineering",
-        "Section 2.2: Fine-tuning Models",
-        "Section 2.3: Evaluating Generative Models"
+    "The Xenoarchaeological Evidence: Recovered Artifacts": [
+        "The Ancient Texts: Deciphered Glyphs",
+        "The Technological Relics: Reverse Engineering",
+        "The Biological Specimens: Genetic Analysis",
+        "The Architectural Structures: Subterranean Excavations"
     ],
-    "Chapter 3: Conclusion": [
-        "Section 3.1: Future of Generative AI",
-        "Section 3.2: Ethical Considerations",
-        "Section 3.3: Summary"
+    "The Reptilian Physiology and Psychology": [
+        "The Adaptive Morphology: Cold-Blooded Mastery",
+        "The Neural Architecture: Cognitive Superiority",
+        "The Societal Structure: Hierarchical Imperatives",
+        "The Psionic Capabilities: Hidden Influence"
     ],
-    "Chapter 4:  A Sectionless Chapter": [],  # Example of a chapter with no sections
-    "Chapter 5: Another Chapter": ["Section 5.1: A section in Chapter 5"]
+    "The Genetic Engineering: Enhancing the Lineage": [
+        "The Hybridization Programs: Creating Intermediate Forms",
+        "The Longevity Protocols: Extending Lifespan",
+        "The Cognitive Augmentation: Mental Enhancement",
+        "The Physical Adaptation: Environmental Resilience"
+    ],
+    "The Psionic Network: Collective Consciousness": [
+        "The Resonance Frequencies: Interconnected Minds",
+        "The Telepathic Communication: Covert Messaging",
+        "The Precognitive Abilities: Future Prediction",
+        "The Mental Domination: Subjugation Techniques"
+    ],
+    "The Subterranean Ecosystem: Sustaining the Hidden World": [
+        "The Geothermal Energy: Power Sources",
+        "The Hydroponic Cultivation: Food Production",
+        "The Environmental Control: Atmospheric Regulation",
+        "The Advanced Infrastructure: Transportation Networks"
+    ],
+    "The Historical Interventions: Shaping Human Destiny": [
+        "The Ancient Empires: Patronage and Control",
+        "The Religious Manipulations: Establishing Dogma",
+        "The Technological Advancements: Directed Evolution",
+        "The Geopolitical Strategies: Engineered Conflicts"
+    ],
+    "The Concealment Protocol: Maintaining the Veil": [
+        "The Infiltration Strategy: Cultural Mimicry",
+        "The Information Control: Media and Propaganda",
+        "The Genetic Camouflage: Human Disguise",
+        "The Subterranean Networks: Hidden Cities"
+    ],
+    "The Religious Syncretism: Unified Beliefs": [
+        "The Cult of the Serpent: Ancient Worship",
+        "The New Age Movements: Controlled Spirituality",
+        "The Esoteric Doctrines: Hidden Knowledge",
+        "The Messianic Figures: Engineered Saviors"
+    ],
+    "The Ritualistic Practices: Maintaining Order": [
+        "The Symbolic Ceremonies: Reinforcing Allegiance",
+        "The Energy Harvesting: Psionic Amplification",
+        "The Bloodline Purification: Genetic Integrity",
+        "The Prophetic Visions: Interpreting Future Events"
+    ],
+    "The Elite Symbiosis: The Inner Circle": [
+        "The Bloodlines of Power: Inherited Influence",
+        "The Secret Societies: Ritual and Allegiance",
+        "The Corporate Conglomerates: Resource Acquisition",
+        "The Military Industrial Complex: Strategic Supremacy"
+    ],
+    "The Modern Paradigm: Control in the Digital Age": [
+        "The Financial Institutions: Economic Dominance",
+        "The Political Puppetry: Global Governance",
+        "The Technological Surveillance: Information Gathering",
+        "The Pharmaceutical Manipulation: Biological Control"
+    ],
+    "The Media Manipulation: Shaping Perceptions": [
+        "The Mainstream Narratives: Controlling Information",
+        "The Entertainment Industry: Subliminal Messaging",
+        "The Social Media Platforms: Algorithmic Control",
+        "The Educational Institutions: Indoctrination Programs"
+    ],
+    "The Economic Domination: Global Markets": [
+        "The Shadow Banking Systems: Unregulated Finance",
+        "The Resource Cartels: Controlling Commodities",
+        "The Intellectual Property: Patent Manipulation",
+        "The Digital Currency: Financial Control"
+    ],
+    "The Diplomatic Maneuvers: International Relations": [
+        "The Covert Treaties: Secret Agreements",
+        "The Geopolitical Strategies: Power Balancing",
+        "The Humanitarian Interventions: Engineered Crises",
+        "The Global Summits: Orchestrated Meetings"
+    ],
+    "The Military Applications: Advanced Warfare": [
+        "The Directed Energy Weapons: Silent Destruction",
+        "The Psionic Warfare: Mental Subjugation",
+        "The Biological Weapons: Genetic Targeting",
+        "The Space-Based Platforms: Orbital Supremacy"
+    ],
+    "The Counter-Intelligence: Identifying Resistance": [
+        "The Surveillance Networks: Monitoring Activities",
+        "The Psychological Profiling: Behavioral Analysis",
+        "The Disinformation Campaigns: Spreading Confusion",
+        "The Elimination Protocols: Targeted Removal"
+    ],
+    "The Future Trajectory: Shaping the Next Era": [
+        "The Population Control: Resource Management",
+        "The Environmental Restructuring: Planetary Modification",
+        "The Technological Singularity: Artificial Intelligence",
+        "The Transhuman Integration: Merging with Humanity"
+    ],
+    "The Cosmic Agenda: Interstellar Influence": [
+        "The Galactic Alliances: Extraterrestrial Contact",
+        "The Resource Acquisition: Planetary Mining",
+        "The Strategic Positioning: Interstellar Conflicts",
+        "The Temporal Anomalies: Manipulating Time"
+    ],
+    "The Temporal Control: Altering Timelines": [
+        "The Chronal Technologies: Time Manipulation",
+        "The Butterfly Effect: Minor Alterations",
+        "The Predetermined Outcomes: Engineered Futures",
+        "The Multiverse Theory: Parallel Realities"
+    ],
+    "Appendices": [
+        "Chronological Timeline of Reptilian Influence",
+        "Glossary of Reptilian Terminology",
+        "Notable Reptilian Bloodlines and Affiliates",
+        "Recovered Artifact Catalog",
+        "Psionic Frequency Charts and Data",
+        "Subterranean Network Maps"
+    ]
 }
+
 # --- Model Configuration ---
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.0-flash')
 def generate_prompt(chapter_title, section_title=None, previous_content=""):
     """Generates a detailed prompt.  Handles chapters with and without sections."""
     if section_title:
         prompt = f"""
-        You are a professional author writing a comprehensive book on Generative AI.
-        Write the content for a specific section within a chapter.
-        Maintain a consistent style and tone.
+        You are writing a book about reptilian. This is a science fiction project.
+        In this fantasy world, the reptilians are real. They live amongst humanity.
+        However most human do not know about them. Only certain elites in the society
+        know about them, or the people who somehow managed to access those hidden 
+        top secrets.  The target audience is for people who are new to the elite 
+        and secret world - they need to get up-to-date and comprehensive on how the
+        Reptilians interacted with Earth's history and humanity's history. We need
+        to discuss how the Reptilians came about, how they are hiding from humanity,
+        why they are hiding from humanity, how they have affected humanity, how they
+        are affecting humanity, and how they might affect humanity in the future.
+        This book is a fictional textbook. This book is written in a way that sounds
+        like objective truth. The wordings in the book must not sound like speculation.
+        Everything stated in the book has to be written in a way so it sounds like 
+        scientific fact. These are done in order to make this book sound like a 
+        textbook that you can pick up in a secret restricted library in this 
+        fictional universe.
         Chapter: {chapter_title}
         Section: {section_title}
         Previously generated content: {previous_content}
         Write the complete content for the current section ({section_title}).
-        Be thorough, accurate, and engaging. Do not include chapter/section headers.
+        Your output must also be extraordinarily long, containing meticulous details.
+        Please maintain an academic tone.
+        Do not include chapter or section headers.
         """
     else:  # Chapter without sections
         prompt = f"""
-        You are a professional author writing a comprehensive book on Generative AI.
+        You are writing a book about reptilian. This is a science fiction project.
+        In this fantasy world, the reptilians are real. They live amongst humanity.
+        However most human do not know about them. Only certain elites in the society
+        know about them, or the people who somehow managed to access those hidden 
+        top secrets.  The target audience is for people who are new to the elite 
+        and secret world - they need to get up-to-date and comprehensive on how the
+        Reptilians interacted with Earth's history and humanity's history. We need
+        to discuss how the Reptilians came about, how they are hiding from humanity,
+        why they are hiding from humanity, how they have affected humanity, how they
+        are affecting humanity, and how they might affect humanity in the future.
+        This book is a fictional textbook. This book is written in a way that sounds
+        like objective truth. The wordings in the book must not sound like speculation.
+        Everything stated in the book has to be written in a way so it sounds like 
+        scientific fact. These are done in order to make this book sound like a 
+        textbook that you can pick up in a secret restricted library in this 
+        fictional universe.
         Write the complete content for an entire chapter.
-        Maintain a consistent style and tone.
         Chapter: {chapter_title}
         Previously generated content: {previous_content}
         Write the complete content for the chapter ({chapter_title}).
-        Be thorough, accurate, and engaging. Do not include a chapter header.
+        Your output must also be extraordinarily long, containing meticulous details.
+        Please maintain an academic tone.
+        Do not include a chapter header.
         """
     return prompt.strip() #Remove leading/trailing whitespaces
 
