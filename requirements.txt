@@ -1,0 +1,10 @@
+google-generativeai
+Markdown
+matplotlib
+PyYAML
+python-docx
+python-dotenv
+lxml
+Pillow
+random-words
+pymdown-extensions
