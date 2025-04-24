@@ -2223,12 +2223,19 @@ def set_page_numbering(section, format_code, start_number=None):
 
 
 def assemble_docx(
-    config, front_matter, body_matter, back_matter, book_title, equation_image_dir
+    config,
+    front_matter,
+    body_matter,
+    back_matter,
+    book_title,
+    equation_image_dir,
+    output_dir,
 ):
     """Assembles the main book DOCX file with complex page numbering and MathML/OXML."""
     logging.info("Assembling main DOCX file...")
     filename_stem = sanitize_filename(book_title)
-    output_filename = f"{filename_stem}.docx"
+    # Construct the full output path using the provided directory
+    output_filename = output_dir / f"{filename_stem}.docx"
     logging.info(f"Main book filename set to: '{output_filename}'")
 
     style_config = config.get("style_params", {})
@@ -2703,6 +2710,7 @@ def assemble_marketing_docx(
     summary_context,
     main_book_filename_stem,
     equation_image_dir,
+    output_dir,
 ):
     """
     Assembles the separate marketing DOCX file using python-docx.
@@ -2710,7 +2718,10 @@ def assemble_marketing_docx(
     if not main_book_filename_stem:
         logging.error("Cannot create marketing docx without main book filename stem.")
         return
-    output_filename = f"{main_book_filename_stem}_Marketing.docx"
+    # Construct the full output path using the provided directory
+    output_filename = (
+        output_dir / f"{main_book_filename_stem}_Marketing.docx"
+    )  # Use pathlib's / operator
     logging.info(f"Assembling marketing DOCX file: '{output_filename}'")
     doc = Document()
     style_config = config.get("style_params", {})
@@ -2864,6 +2875,23 @@ if __name__ == "__main__":
     config = load_config()
     api_key = setup_environment()
     configure_gemini(api_key)
+
+    # --- Determine Output Directory ---
+    # Default to a subdirectory named 'output' in the current working directory
+    output_base_dir_str = config.get("output_dir", "output")
+    output_base_dir = pathlib.Path(output_base_dir_str)
+    # Create the base output directory if it doesn't exist
+    try:
+        output_base_dir.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Using output directory: {output_base_dir.resolve()}")
+    except Exception as e:
+        logging.error(
+            f"Failed to create output directory '{output_base_dir}': {e}. Exiting."
+        )
+        sys.exit(1)
+    # Store the resolved path back in config for potential use elsewhere (optional)
+    config["output_dir_resolved"] = output_base_dir
+    # --- End Output Directory Setup ---
 
     # --- Determine Base Cache Directory ---
     base_cache_dir = config.get("cache_dir", "api_cache")
@@ -3121,6 +3149,7 @@ if __name__ == "__main__":
             summary_context,
             main_filename_stem,
             equation_image_dir,
+            output_base_dir,
         )
     else:
         logging.error(
@@ -3187,6 +3216,7 @@ if __name__ == "__main__":
         back_matter_content,
         book_title,
         equation_image_dir,
+        output_base_dir,
     )
 
     end_time = time.time()
