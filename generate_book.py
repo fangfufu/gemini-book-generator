@@ -408,8 +408,8 @@ def generate_random_name(config, gender):
     prompt = f"""Generate a single, plausible-sounding full name (first and last name)
 for a fictional author. The author's gender is {gender}.
 The author is notionally writing a book about
-'{config['generation_params']['main_topic']}'. The book is set in a universe
-described as: {config['generation_params']['universe_setting']}. Key concepts
+'{config['generation_params']['main_topic']}'. The setting of the book is
+described as: {config['generation_params']['setting']}. Key concepts
 include: {', '.join(config['generation_params']['key_concepts'])}.
 Consider a name that might appear on a book. Output *only* the full name.
 Do not add introductory text, explanations, or quotation marks."""
@@ -434,11 +434,11 @@ Do not add introductory text, explanations, or quotation marks."""
 def generate_random_topic(config):
     """Generates a completely random book topic using the Gemini API."""
     logging.info("Auto-generating a random main topic...")
-    random_seed = " ".join(RandomWords().random_words(count=5))
+    random_seed = " ".join(RandomWords().random_words(count=30))
     if "generation_params" not in config:
         config["generation_params"] = {}
     config["generation_params"]["random_topic_seed"] = random_seed
-    prompt = f"""Generate a single and specific topic suitable for a book.
+    prompt = f"""Generate a topic for a book.
 Random seed: {random_seed}
 Output *only* the topic text itself.
 Do not add introductory text, explanations, or quotation marks.
@@ -460,38 +460,34 @@ Output in British English."""
         return None
 
 
-def generate_universe_setting(config):
-    """Generates the universe setting using the Gemini API based on the main topic."""
-    logging.info("Auto-generating universe setting...")
+def generate_setting(config):
+    """Generates the setting using the Gemini API based on the main topic."""
+    logging.info("Auto-generating setting...")
     main_topic = config.get("generation_params", {}).get(
         "main_topic", "[No Main Topic Provided]"
     )
 
     if main_topic == "[No Main Topic Provided]":
-        logging.error(
-            "Cannot generate universe setting without 'main_topic' in config."
-        )
+        logging.error("Cannot generate setting without 'main_topic' in config.")
         return None
 
-    prompt = f"""Based on the main topic '{main_topic}', generate an extremely short 
-and concise description of a universe setting where this topic could be explored.
-Output only the universe setting description text. Do not add introductory text.
+    prompt = f"""Based on the main topic '{main_topic}', generate an
+extremely short description of a setting where this topic could be explored.
+Output only the setting description text. Do not add introductory text.
 Output in British English."""
 
-    setting_text = call_gemini_api(prompt, config, cache_prefix="universe_setting")
+    setting_text = call_gemini_api(prompt, config, cache_prefix="setting")
 
     if setting_text:
         cleaned_setting = setting_text.strip().strip("\"'")
         if cleaned_setting:
-            logging.info(
-                f"Successfully auto-generated universe setting:\n'{cleaned_setting}'"
-            )
+            logging.info(f"Successfully auto-generated setting:\n'{cleaned_setting}'")
             return cleaned_setting
         else:
-            logging.warning("Generated universe setting was empty after cleaning.")
+            logging.warning("Generated setting was empty after cleaning.")
             return None
     else:
-        logging.error("Failed to generate universe setting via API.")
+        logging.error("Failed to generate setting via API.")
         return None
 
 
@@ -501,17 +497,14 @@ def generate_writing_tone(config):
     main_topic = config.get("generation_params", {}).get(
         "main_topic", "[No Main Topic Provided]"
     )
-    universe_setting = config.get("generation_params", {}).get(
-        "universe_setting", "[No Universe Setting Provided]"
+    setting = config.get("generation_params", {}).get(
+        "setting", "[No  Setting Provided]"
     )
     key_concepts = config.get("generation_params", {}).get("key_concepts", [])
 
-    if (
-        main_topic == "[No Main Topic Provided]"
-        or universe_setting == "[No Universe Setting Provided]"
-    ):
+    if main_topic == "[No Main Topic Provided]" or setting == "[No  Setting Provided]":
         logging.warning(
-            "Cannot generate specific writing tone without 'main_topic' and 'universe_setting'. Using a generic prompt."
+            "Cannot generate specific writing tone without 'main_topic' and 'setting'. Using a generic prompt."
         )
         prompt = f"""Generate some words describing a suitable writing tone
 for a book. Output only the phrase describing the tone. Do not add introductory
@@ -522,8 +515,8 @@ text. Output in British English."""
             if key_concepts
             else "[No specific concepts provided]"
         )
-        prompt = f"""Based on the main topic '{main_topic}', a universe setting described as:
-"{universe_setting}" and key concepts including: {concepts_str}, generate some words
+        prompt = f"""Based on the main topic '{main_topic}', a setting described as:
+"{setting}" and key concepts including: {concepts_str}, generate some words
 describing the most suitable writing tone for a book exploring this
 topic. Output *only* the phrase describing the tone. Do not add introductory
 text. Output in British English."""
@@ -550,25 +543,21 @@ def generate_key_concepts(config):
     main_topic = config.get("generation_params", {}).get(
         "main_topic", "[No Main Topic Provided]"
     )
-    universe_setting = config.get("generation_params", {}).get(
-        "universe_setting", "[No Universe Setting Provided]"
+    setting = config.get("generation_params", {}).get(
+        "setting", "[No  Setting Provided]"
     )
 
-    if (
-        main_topic == "[No Main Topic Provided]"
-        or universe_setting == "[No Universe Setting Provided]"
-    ):
+    if main_topic == "[No Main Topic Provided]" or setting == "[No  Setting Provided]":
         logging.error(
-            "Cannot generate key concepts without 'main_topic' and 'generation_params.universe_setting' in config."
+            "Cannot generate key concepts without 'main_topic' and 'generation_params.setting' in config."
         )
         return None
 
-    prompt = f"""Based on the main topic '{main_topic}' and a universe setting described as:
-"{universe_setting}"
+    prompt = f"""Based on the main topic '{main_topic}' in a setting described as:
+"{setting}"
 
 Generate an extremely short list of distinct and relevant key concepts or
-terms that would likely be central to a book exploring this topic within this
-universe.
+terms that would be central to exploring this topic within the setting.
 
 Format the output as a simple comma-separated list. Example:
 Concept One, Concept Two, Another Key Term, Fourth Idea, Final Concept
@@ -593,8 +582,8 @@ def generate_book_title(config):
     """Generates the book title using the Gemini API. Exits script on failure."""
     logging.info("Generating book title...")
     prompt = f"""Generate the book title for a book about
-'{config['generation_params']['main_topic']}'. The book is set in a universe
-described as: {config['generation_params']['universe_setting']}. Key concepts
+'{config['generation_params']['main_topic']}'. The setting of the book is
+described as: {config['generation_params']['setting']}. Key concepts
 include: {', '.join(config['generation_params']['key_concepts'])}.
 Do not generate a two-part title. The generated title must not contain a subtitle.
 Provide only the title text. Do not add introductory text. The title must not
@@ -616,9 +605,9 @@ def generate_book_subtitle(config, book_title, summary_context):
     logging.info(f"Generating subtitle for book: '{book_title}' (using summaries)...")
 
     prompt = f"""Generate a subtitle for the book titled '{book_title}'.
-The book's main topic is '{config['generation_params']['main_topic']}'.
-The book is set in a universe described as:
-{config['generation_params']['universe_setting']}.
+The main topic of the book is '{config['generation_params']['main_topic']}'.
+The setting of the book described as:
+{config['generation_params']['setting']}.
 Key concepts include: {', '.join(config['generation_params']['key_concepts'])}.
 {summary_context}
 The subtitle should complement the main title.
@@ -647,8 +636,8 @@ def generate_chapter_outline(config):
     """Generates a list of chapter titles."""
     logging.info("Generating chapter outline...")
     prompt = f"""Generate a short list of chapter titles for a
-book about '{config['generation_params']['main_topic']}'. The book is set in a
-universe described as: {config['generation_params']['universe_setting']}.
+book about '{config['generation_params']['main_topic']}'. The setting of the book
+is described as: {config['generation_params']['setting']}.
 Key concepts include: {', '.join(config['generation_params']['key_concepts'])}.
 The chapters should logically progress through the topic.
 Format the output as a numbered list, with each title on a new line.
@@ -699,7 +688,7 @@ def generate_chapter_summary(
     prompt_parts = [
         f"Write an extremely short and concise summary for the chapter titled '{chapter_title}'.",
         f"This chapter is part of a book about '{config['generation_params']['main_topic']}'.",
-        f"The book is set in a universe described as: {config['generation_params']['universe_setting']}.",
+        f"The setting of the book is described as: {config['generation_params']['setting']}.",
         f"Key concepts: {', '.join(config['generation_params']['key_concepts'])}.",
     ]
 
@@ -789,7 +778,7 @@ def generate_section_titles(
     prompt = f"""
 Context for the entire book:
 Main Topic: '{config['generation_params']['main_topic']}'
-Universe Setting: {config['generation_params']['universe_setting']}
+Setting: {config['generation_params']['setting']}
 Key Concepts: {', '.join(config['generation_params']['key_concepts'])}
 
 Full Chapter Outline:
@@ -875,7 +864,7 @@ def generate_section_content(
     prompt = f"""
 Context:
 - Book Main Topic: '{config['generation_params']['main_topic']}'
-- Universe Setting: {config['generation_params']['universe_setting']}
+- Setting: {config['generation_params']['setting']}
 - Key Concepts: {', '.join(config['generation_params']['key_concepts'])}
 - Current Chapter Title: '{chapter_title}'
 - Current Chapter Summary: "{chapter_summary}"
@@ -985,8 +974,8 @@ limited to special, incidental, consequential, personal, or other damages.
 """.strip()
 
     common_prompt_base = f"""
-for the book '{book_title}' about {config['generation_params']['main_topic']}, set in the universe:
-{config['generation_params']['universe_setting']}. {summary_context}
+for the book '{book_title}' about {config['generation_params']['main_topic']}, with the setting:
+{config['generation_params']['setting']}. {summary_context}
 Maintain a tone that is {writing_tone}.
 Output *only* the text content for this section. Do not add introductory text.
 Output in British English.
@@ -1059,8 +1048,8 @@ def generate_back_matter(
     logging.info("Generating back matter...")
     back_matter = {}
     common_prompt_base = f"""
-of the book '{book_title}' about {config['generation_params']['main_topic']}, set in the universe:
-{config['generation_params']['universe_setting']} {summary_context}
+of the book '{book_title}' about {config['generation_params']['main_topic']}, with the setting:
+{config['generation_params']['setting']} {summary_context}
 Maintain a tone that is {writing_tone}.
 Do not add introductory text. Output *only* the text content for this section.
 Output in British English."""
@@ -1087,12 +1076,12 @@ def generate_book_blurb(config, book_title, summary_context, writing_tone):
     logging.info(f"Generating marketing blurb for book: '{book_title}'...")
 
     main_topic = config["generation_params"]["main_topic"]
-    universe_setting = config["generation_params"]["universe_setting"]
+    setting = config["generation_params"]["setting"]
     key_concepts = ", ".join(config["generation_params"]["key_concepts"])
 
     prompt = f"""Write a compelling marketing blurb for a book titled '{book_title}'.
-The book's main topic is '{main_topic}'.
-The book is set in a universe described as: {universe_setting}.
+The main topic of the book is '{main_topic}'.
+The setting of the book is described as: {setting}.
 Key concepts include: {key_concepts}.
 {summary_context}
 The blurb should entice readers while accurately reflecting the book's content.
@@ -1115,6 +1104,74 @@ Output in British English."""
     else:
         logging.warning("Failed to generate book blurb. Using placeholder.")
         return f"Placeholder blurb for book '{book_title}'."
+
+
+def generate_overall_summary(config, book_title, summary_context):
+    """Generates a single overall book summary using chapter summaries."""
+    logging.info(f"Generating overall book summary for: '{book_title}'...")
+
+    if not summary_context or summary_context == "[No chapter summaries available]":
+        logging.warning(
+            "Cannot generate overall summary: No chapter summaries available."
+        )
+        return f"Placeholder overall summary for the book '{book_title}'."
+
+    prompt = f"""Based *only* on the following chapter summaries for the book 
+titled '{book_title}', write an extremely short overall summary or abstract of 
+the entire book.
+
+
+Chapter Summaries:
+{summary_context}
+
+Output *only* the overall summary text. Do not add introductory text.
+Output in British English."""
+
+    overall_summary = call_gemini_api(
+        prompt, config, cache_prefix="overall_book_summary"
+    )
+
+    if overall_summary:
+        cleaned_summary = overall_summary.strip()
+        if cleaned_summary:
+            logging.info("Successfully generated overall book summary.")
+            return cleaned_summary
+        else:
+            logging.warning(
+                "Generated overall summary was empty after cleaning. Using placeholder."
+            )
+            return f"Placeholder overall summary for the book '{book_title}'."
+    else:
+        logging.warning(
+            "Failed to generate overall book summary via API. Using placeholder."
+        )
+        return f"Placeholder overall summary for the book '{book_title}'."
+
+
+def save_summary_to_markdown(book_title, overall_summary, output_dir):
+    """Saves the overall book summary to a Markdown file."""
+    if not overall_summary:
+        logging.warning("No overall summary provided to save.")
+        return
+
+    filename_stem = sanitize_filename(book_title)
+    if not filename_stem or filename_stem.startswith("sanitized_empty"):
+        logging.error(
+            f"Could not create a valid filename from title '{book_title}'. Skipping summary Markdown save."
+        )
+        return
+
+    output_filename = output_dir / f"{filename_stem}_Summary.md"
+    markdown_content = f"# {book_title}\n\n{overall_summary}\n"
+
+    try:
+        with open(output_filename, "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+        logging.info(f"Overall book summary saved to Markdown: '{output_filename}'")
+    except Exception as e:
+        logging.error(
+            f"Error saving overall summary to Markdown file '{output_filename}': {e}"
+        )
 
 
 # --- DOCX Processing Functions --- (No changes needed in these for caching)
@@ -2782,8 +2839,8 @@ def assemble_marketing_docx(
     doc.add_paragraph("Writing Tone:", style="Heading 2")
     doc.add_paragraph(writing_tone)
 
-    doc.add_paragraph("Universe Setting:", style="Heading 2")
-    doc.add_paragraph(gen_params.get("universe_setting", "[Not Specified]"))
+    doc.add_paragraph("Setting:", style="Heading 2")
+    doc.add_paragraph(gen_params.get("setting", "[Not Specified]"))
 
     doc.add_paragraph("Key Concepts:", style="Heading 2")
     key_concepts = gen_params.get("key_concepts", [])
@@ -2898,7 +2955,7 @@ if __name__ == "__main__":
     pathlib.Path(base_cache_dir).mkdir(parents=True, exist_ok=True)
     logging.info(f"Using base cache directory: {base_cache_dir}")
 
-    # --- Auto-generation Steps (Topic, Universe, Concepts, Author, Tone) ---
+    # --- Auto-generation Steps (Topic, , Concepts, Author, Tone) ---
     generation_params = config.setdefault("generation_params", {})  # Ensure exists
 
     # Auto-generate Random Topic (if configured)
@@ -2946,23 +3003,19 @@ if __name__ == "__main__":
     logging.info(f"Equation image directory set to: {equation_image_dir}")
     # --- End Equation Image Directory Setup ---
 
-    # Auto-generate Universe Setting (if configured)
-    if generation_params.get("auto_generate_universe_setting", False):
-        logging.info("Configuration requests auto-generation of universe setting.")
-        generated_setting = generate_universe_setting(config)  # API call
+    # Auto-generate  Setting (if configured)
+    if generation_params.get("auto_generate_setting", False):
+        logging.info("Configuration requests auto-generation of setting.")
+        generated_setting = generate_setting(config)  # API call
         if generated_setting:
-            generation_params["universe_setting"] = generated_setting
+            generation_params["setting"] = generated_setting
         else:
             logging.warning(
-                "Failed to auto-generate universe setting. Using config/placeholder."
+                "Failed to auto-generate setting. Using config/placeholder."
             )
-            generation_params.setdefault(
-                "universe_setting", "[Universe Setting Generation Failed]"
-            )
-    generation_params.setdefault("universe_setting", "[No Universe Setting Provided]")
-    logging.info(
-        f"Using universe_setting: '{generation_params['universe_setting'][:100]}...'"
-    )
+            generation_params.setdefault("setting", "[Setting Generation Failed]")
+    generation_params.setdefault("setting", "[No  Setting Provided]")
+    logging.info(f"Using setting: '{generation_params['setting'][:100]}...'")
 
     # Auto-generate Key Concepts (if configured)
     if generation_params.get("auto_generate_key_concepts", False):
@@ -3117,6 +3170,11 @@ if __name__ == "__main__":
         logging.warning(
             "No valid chapter summaries generated to create summary context."
         )
+
+    # --- Generate Overall Summary and Save to Markdown ---
+    overall_summary_text = generate_overall_summary(config, book_title, summary_context)
+    save_summary_to_markdown(book_title, overall_summary_text, output_base_dir)
+    # --- End Overall Summary Generation ---
 
     # --- Generate Front/Back Matter & Marketing Content (using summaries) ---
     logging.info("--- Generating Front Matter, Back Matter, and Marketing Content ---")

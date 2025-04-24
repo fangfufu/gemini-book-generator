@@ -2,6 +2,14 @@
 
   A Python script that leverages the Google Gemini API to automatically generate complete books, including front matter, body content, back matter, and marketing materials, based on a configuration file. The script formats the output into DOCX files with support for LaTeX math rendering.
 
+  ## Todo
+  - Refactor the script
+    - Split the script
+    - Markdown -> Intermediate HTML
+    - Intermediate HTML -> HTML doc, docx, epub
+  - Create a cover generator
+  - Create a Github.io website for all the generated books.
+
   ## Features
 
   *   **AI-Powered Content Generation:** Uses the Google Gemini API to generate:
@@ -12,12 +20,12 @@
       *   Back Matter (Appendix, Glossary, Bibliography, About the Author)
       *   Marketing Blurb
   *   **Configurable Generation:** Control various aspects via `config.yaml`:
-      *   Main Topic, Universe Setting, Key Concepts
+      *   Main Topic, Settings, Key Concepts
       *   Author Details (Name, Gender) - Can be auto-generated
       *   Writing Tone - Can be auto-generated
       *   Gemini Model & API Parameters (Temperature, Retries)
       *   DOCX Styling (Font, Size, Page Size, Margins)
-  *   **Automatic Topic/Author Generation:** Option to automatically generate a random topic, universe setting, key concepts, author name/gender, and writing tone if not specified.
+  *   **Automatic Topic/Author Generation:** Option to automatically generate a random topic, setting, key concepts, author name/gender, and writing tone if not specified.
   *   **DOCX Output:** Assembles the generated content into a structured `.docx` file using `python-docx`.
   *   **Complex DOCX Formatting:**
       *   Handles Markdown conversion (including tables, lists, emphasis).
