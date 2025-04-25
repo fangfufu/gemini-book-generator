@@ -472,7 +472,7 @@ def generate_setting(config):
         return None
 
     prompt = f"""Based on the main topic '{main_topic}', generate an
-extremely short description of a setting where this topic could be explored.
+extremely short description of the setting where this topic could be explored.
 Output only the setting description text. Do not add introductory text.
 Output in British English."""
 
@@ -888,8 +888,7 @@ tables).
 Markdown output.
 6.  Ensure paragraphs are separated by double line breaks in the Markdown source.
 7.  Do *not* include any Markdown sub-headings (like ## Heading Level 2 or 
-### Heading Level 3). The section content should only contain paragraphs, lists,
-bold/italic formatting, tables, and equations if necessary.
+### Heading Level 3).
 8.  If mathematical equations are necessary, format them using standard LaTeX 
 syntax: use $...$ for inline math and $$...$$ for display math.
 9. Write the entire output in British English.
