@@ -198,4 +198,4 @@ api_cache/
 .env
 
 # Generated documents
-*.docx
+generated_books/

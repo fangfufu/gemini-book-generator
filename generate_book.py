@@ -502,7 +502,7 @@ def generate_random_topic(config):
         logging.info("No seed in config, generating a new random topic seed...")
         # Generate a new random seed if none was provided
         try:
-            random_seed = " ".join(RandomWords().random_words(count=30))
+            random_seed = " ".join(RandomWords().random_words(count=15))
             # Store the newly generated seed back into the config dictionary (in memory)
             config["generation_params"]["random_topic_seed"] = random_seed
             logging.info(f"Generated random topic seed: '{random_seed}'")
