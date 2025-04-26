@@ -29,9 +29,9 @@ from random_words import RandomWords
 
 # Configure Matplotlib to use LaTeX and load amsmath
 matplotlib.rcParams["text.usetex"] = True
-matplotlib.rcParams[
-    "text.latex.preamble"
-] = r"\usepackage{amsmath}  \usepackage{amssymb}"
+matplotlib.rcParams["text.latex.preamble"] = (
+    r"\usepackage{amsmath}  \usepackage{amssymb}"
+)
 
 # Ensure matplotlib doesn't try to use a GUI backend
 plt.switch_backend("Agg")
@@ -402,6 +402,58 @@ def generate_random_gender(config):
     return random.choice(["male", "female"])
 
 
+def determine_gender_from_name(config, author_name):
+    """Determines the likely gender (male/female) based on the author's name using the Gemini API."""
+    logging.info(f"Attempting to determine gender for author name: '{author_name}'...")
+
+    # Check if the name seems valid (basic check)
+    if (
+        not author_name
+        or not isinstance(author_name, str)
+        or " " not in author_name.strip()
+    ):
+        logging.warning(
+            f"Invalid or potentially incomplete name provided ('{author_name}'). Cannot reliably determine gender."
+        )
+        return None  # Indicate failure
+
+    prompt = f"""
+Based *only* on the full name '{author_name}', what is the most likely gender associated with the first name?
+
+Consider common associations in Western cultures, primarily English-speaking contexts, as the book is in British English.
+
+Output *only* one of the following words:
+- male
+- female
+- other (use this only if the name is strongly ambiguous, unisex, or clearly not a typical given name)
+
+Do not add any introductory text, explanations, or quotation marks. Just the single word.
+"""
+
+    gender_text = call_gemini_api(
+        prompt,
+        config,
+        cache_prefix=f"determine_gender_{sanitize_filename(author_name, 30)}",
+    )
+
+    if gender_text:
+        cleaned_gender = gender_text.strip().lower()
+        valid_genders = ["male", "female", "other"]
+        if cleaned_gender in valid_genders:
+            logging.info(
+                f"Successfully determined likely gender for '{author_name}': '{cleaned_gender}'"
+            )
+            return cleaned_gender
+        else:
+            logging.warning(
+                f"API returned an unexpected value for gender ('{gender_text}'). Treating as undetermined."
+            )
+            return None  # Indicate failure or ambiguity
+    else:
+        logging.error(f"Failed to determine gender for '{author_name}' via API.")
+        return None  # Indicate failure
+
+
 def generate_random_name(config, gender):
     """Generates a random author name based on the specified gender using the Gemini API."""
     logging.info(f"Auto-generating random author name for gender: {gender}...")
@@ -432,12 +484,35 @@ Do not add introductory text, explanations, or quotation marks."""
 
 
 def generate_random_topic(config):
-    """Generates a completely random book topic using the Gemini API."""
-    logging.info("Auto-generating a random main topic...")
-    random_seed = " ".join(RandomWords().random_words(count=30))
+    """
+    Generates a book topic using the Gemini API.
+    Uses a seed from config if provided, otherwise generates a random one.
+    """
+    logging.info("Determining topic seed...")
     if "generation_params" not in config:
         config["generation_params"] = {}
-    config["generation_params"]["random_topic_seed"] = random_seed
+
+    # Check if a seed is provided in the config
+    provided_seed = config["generation_params"].get("random_topic_seed", "").strip()
+
+    if provided_seed:
+        random_seed = provided_seed
+        logging.info(f"Using random topic seed from config: '{random_seed}'")
+    else:
+        logging.info("No seed in config, generating a new random topic seed...")
+        # Generate a new random seed if none was provided
+        try:
+            random_seed = " ".join(RandomWords().random_words(count=30))
+            # Store the newly generated seed back into the config dictionary (in memory)
+            config["generation_params"]["random_topic_seed"] = random_seed
+            logging.info(f"Generated random topic seed: '{random_seed}'")
+        except Exception as e:
+            logging.error(f"Failed to generate random words for seed: {e}")
+            # Fallback seed in case RandomWords fails
+            random_seed = f"fallback_seed_{uuid.uuid4().hex[:8]}"
+            config["generation_params"]["random_topic_seed"] = random_seed
+            logging.warning(f"Using fallback seed: '{random_seed}'")
+
     prompt = f"""Generate a topic for a book.
 Random seed: {random_seed}
 Output *only* the topic text itself.
@@ -472,7 +547,7 @@ def generate_setting(config):
         return None
 
     prompt = f"""Based on the main topic '{main_topic}', generate an
-extremely short description of the setting where this topic could be explored.
+short description of the setting where this topic could be explored.
 Output only the setting description text. Do not add introductory text.
 Output in British English."""
 
@@ -556,7 +631,7 @@ def generate_key_concepts(config):
     prompt = f"""Based on the main topic '{main_topic}' in a setting described as:
 "{setting}"
 
-Generate an extremely short list of distinct and relevant key concepts or
+Generate a short list of distinct and relevant key concepts or
 terms that would be central to exploring this topic within the setting.
 
 Format the output as a simple comma-separated list. Example:
@@ -686,7 +761,7 @@ def generate_chapter_summary(
 
     # --- Build the prompt ---
     prompt_parts = [
-        f"Write an extremely short and concise summary for the chapter titled '{chapter_title}'.",
+        f"Write a short and concise summary for the chapter titled '{chapter_title}'.",
         f"This chapter is part of a book about '{config['generation_params']['main_topic']}'.",
         f"The setting of the book is described as: {config['generation_params']['setting']}.",
         f"Key concepts: {', '.join(config['generation_params']['key_concepts'])}.",
@@ -789,7 +864,7 @@ Summaries of OTHER chapters (for context on what's covered elsewhere):
 
 ---
 Task:
-Generate a extremely short list of relevant section titles specifically for the
+Generate a short list of relevant section titles specifically for the
 chapter titled '{chapter_title}'.This chapter's specific summary is:
 "{chapter_summary}"
 
@@ -931,9 +1006,8 @@ def generate_front_matter(
     }
 
     current_year = time.strftime("%Y")
-    front_matter[
-        "copyright_page"
-    ] = f"""
+    front_matter["copyright_page"] = (
+        f"""
 Copyright © {current_year} by {author_name}
 
 
@@ -971,6 +1045,7 @@ a professional when appropriate. Neither the publisher nor the author shall be
 liable for any loss of profit or any other commercial damages, including but not
 limited to special, incidental, consequential, personal, or other damages.
 """.strip()
+    )
 
     common_prompt_base = f"""
 for the book '{book_title}' about {config['generation_params']['main_topic']}, with the setting:
@@ -1116,7 +1191,7 @@ def generate_overall_summary(config, book_title, summary_context):
         return f"Placeholder overall summary for the book '{book_title}'."
 
     prompt = f"""Based *only* on the following chapter summaries for the book 
-titled '{book_title}', write an extremely short overall summary or abstract of 
+titled '{book_title}', write a short overall summary or abstract of 
 the entire book.
 
 
@@ -2351,9 +2426,9 @@ def assemble_docx(
             title_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Title"].font.name = font_name
-            doc.styles[
-                "Title"
-            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            doc.styles["Title"].paragraph_format.alignment = (
+                WD_PARAGRAPH_ALIGNMENT.CENTER
+            )
 
         if "Subtitle" not in doc.styles:
             subtitle_style = doc.styles.add_style("Subtitle", WD_STYLE_TYPE.PARAGRAPH)
@@ -2365,9 +2440,9 @@ def assemble_docx(
             subtitle_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Subtitle"].font.name = font_name
-            doc.styles[
-                "Subtitle"
-            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            doc.styles["Subtitle"].paragraph_format.alignment = (
+                WD_PARAGRAPH_ALIGNMENT.CENTER
+            )
 
         # Ensure List Bullet exists (as before)
         if "List Bullet" not in doc.styles:
@@ -2839,6 +2914,10 @@ def assemble_marketing_docx(
         doc.add_paragraph("Random Topic Seed:", style="Heading 2")
         doc.add_paragraph(random_topic_seed)
 
+    model_name_used = config.get("gemini_model", "")
+    doc.add_paragraph("Gemini Model Used:", style="Heading 2")
+    doc.add_paragraph(model_name_used)
+
     doc.add_paragraph("Main Topic:", style="Heading 2")
     doc.add_paragraph(gen_params.get("main_topic", "[Not Specified]"))
 
@@ -2962,29 +3041,30 @@ if __name__ == "__main__":
     pathlib.Path(base_cache_dir).mkdir(parents=True, exist_ok=True)
     logging.info(f"Using base cache directory: {base_cache_dir}")
 
-    # --- Auto-generation Steps (Topic, , Concepts, Author, Tone) ---
+    # --- Determine Main Topic ---
     generation_params = config.setdefault("generation_params", {})  # Ensure exists
 
-    # Auto-generate Random Topic (if configured)
-    if generation_params.get("auto_generate_random_topic", False):
-        logging.info("Configuration requests auto-generation of a random main topic.")
+    # Check if main_topic is provided in the config
+    if not generation_params.get("main_topic"):
+        logging.info(
+            "No 'main_topic' found in config. Attempting to auto-generate one."
+        )
         random_topic = generate_random_topic(config)  # API call happens here
         if random_topic:
             generation_params["main_topic"] = random_topic
-            logging.info(f"Overrode main_topic with: '{random_topic}'")
+            logging.info(f"Auto-generated main_topic: '{random_topic}'")
         else:
-            logging.error("Failed to auto-generate random topic. Checking config...")
-            if not generation_params.get("main_topic"):
-                logging.critical(
-                    "Fatal: Random topic failed and no main_topic in config. Exiting."
-                )
-                sys.exit(1)
-    elif not generation_params.get("main_topic"):
-        logging.critical(
-            "Fatal: 'auto_generate_random_topic' is false and no 'main_topic' in config. Exiting."
+            # If generation fails and it wasn't in config, we cannot proceed.
+            logging.critical(
+                "Fatal: Failed to auto-generate random topic and none provided in config. Exiting."
+            )
+            sys.exit(1)
+    else:
+        # If main_topic was provided in config, use it.
+        logging.info(
+            f"Using main_topic from config: '{generation_params['main_topic']}'"
         )
-        sys.exit(1)
-    logging.info(f"Using main_topic: '{generation_params['main_topic']}'")
+    # --- End Main Topic Determination ---
 
     # --- Construct Topic-Specific Cache Path AFTER topic is determined ---
     main_topic = generation_params["main_topic"]
@@ -3010,23 +3090,67 @@ if __name__ == "__main__":
     logging.info(f"Equation image directory set to: {equation_image_dir}")
     # --- End Equation Image Directory Setup ---
 
-    # Auto-generate  Setting (if configured)
-    if generation_params.get("auto_generate_setting", False):
-        logging.info("Configuration requests auto-generation of setting.")
+    # Determine Setting
+    if not generation_params.get("setting"):
+        logging.info("No 'setting' found in config. Attempting to auto-generate one.")
         generated_setting = generate_setting(config)  # API call
         if generated_setting:
             generation_params["setting"] = generated_setting
+            logging.info(f"Auto-generated setting: '{generated_setting[:100]}...'")
         else:
-            logging.warning(
-                "Failed to auto-generate setting. Using config/placeholder."
-            )
-            generation_params.setdefault("setting", "[Setting Generation Failed]")
-    generation_params.setdefault("setting", "[No  Setting Provided]")
-    logging.info(f"Using setting: '{generation_params['setting'][:100]}...'")
+            # If generation fails and it wasn't in config, use a placeholder.
+            logging.warning("Failed to auto-generate setting. Using placeholder.")
+            generation_params["setting"] = "[Setting Generation Failed]"
+    else:
+        # If setting was provided in config, use it.
+        logging.info(
+            f"Using setting from config: '{generation_params['setting'][:100]}...'"
+        )
 
-    # Auto-generate Key Concepts (if configured)
-    if generation_params.get("auto_generate_key_concepts", False):
-        logging.info("Configuration requests auto-generation of key concepts.")
+    # Ensure setting exists even if generation failed or config was empty initially
+    generation_params.setdefault(
+        "setting", "[No Setting Provided or Generation Failed]"
+    )
+    # Log the final setting being used (could be from config, generated, or placeholder)
+    logging.info(f"Final setting being used: '{generation_params['setting'][:100]}...'")
+
+    # Determine Key Concepts: Use from config if provided, otherwise generate.
+    key_concepts = generation_params.get("key_concepts")
+
+    # Validate if key_concepts from config is a list and non-empty
+    if key_concepts and isinstance(key_concepts, list):
+        logging.info(
+            f"Using {len(key_concepts)} key concepts provided in configuration."
+        )
+        # Ensure the list contains only strings and strip whitespace
+        generation_params["key_concepts"] = [
+            str(item).strip() for item in key_concepts if str(item).strip()
+        ]
+        # Re-check length after cleaning
+        if not generation_params["key_concepts"]:
+            logging.warning(
+                "Provided key_concepts list was empty after cleaning. Will attempt to generate."
+            )
+            key_concepts = None  # Trigger generation below
+        else:
+            logging.info(
+                f"Validated {len(generation_params['key_concepts'])} key concepts from configuration."
+            )
+
+    else:
+        if key_concepts is not None:  # Log if it was present but invalid
+            logging.warning(
+                f"Invalid or empty 'key_concepts' found in config (type: {type(key_concepts)}). Attempting auto-generation."
+            )
+        else:  # Log if it was missing entirely
+            logging.info(
+                "No 'key_concepts' found in config. Attempting auto-generation."
+            )
+        key_concepts = None  # Ensure generation is triggered
+
+    # Attempt generation if needed
+    if key_concepts is None:
+        logging.info("Attempting to auto-generate key concepts.")
         generated_concepts = generate_key_concepts(config)  # API call
         if generated_concepts:
             generation_params["key_concepts"] = generated_concepts
@@ -3036,78 +3160,158 @@ if __name__ == "__main__":
             )
             # Log the count and the formatted list
             logging.info(
-                f"Generated {len(generated_concepts)} key concepts:\n{concepts_formatted_for_log}"
+                f"Successfully auto-generated {len(generated_concepts)} key concepts:\n{concepts_formatted_for_log}"
             )
         else:
             logging.warning(
-                "Failed to auto-generate key concepts. Using config/default."
+                "Failed to auto-generate key concepts. Proceeding with an empty list."
             )
-            generation_params.setdefault("key_concepts", [])
-    else:
-        generation_params.setdefault(
-            "key_concepts", []
-        )  # Ensure it's at least an empty list
-        # Validate if it's a list if it came from config
-        if not isinstance(generation_params["key_concepts"], list):
-            logging.warning(
-                f"key_concepts from config is not a list ({type(generation_params['key_concepts'])}). Resetting to empty list."
-            )
-            generation_params["key_concepts"] = []
-    logging.info(f"Using {len(generation_params['key_concepts'])} key concepts.")
+            generation_params["key_concepts"] = (
+                []
+            )  # Ensure it's an empty list on failure
 
-    # Auto-generate Random Author (if configured)
-    if generation_params.get("auto_generate_random_author", False):
-        logging.info("Configuration requests auto-generation of a random author.")
-        generated_gender = generate_random_gender(config)  # No API call
+    # Final log of the count being used
+    final_count = len(generation_params.get("key_concepts", []))
+    logging.info(f"Using {final_count} key concepts for generation.")
+
+    # --- Determine Author Name and Gender ---
+    author_name = generation_params.get("author_name", "").strip()
+    author_gender = generation_params.get("author_gender", "").strip().lower()
+    valid_genders = ["male", "female", "other"]
+
+    if not author_name and not author_gender:
+        logging.info("Author name and gender missing. Generating both...")
+        # 1. Generate gender first
+        generated_gender = generate_random_gender(config)  # Simple random choice
+        logging.info(f"Randomly selected gender: {generated_gender}")
+        # 2. Generate name based on gender
         generated_name = generate_random_name(config, generated_gender)  # API call
         if generated_name:
-            generation_params["author_gender"] = generated_gender
-            generation_params["author_name"] = generated_name
+            author_name = generated_name
+            author_gender = generated_gender
+            generation_params["author_name"] = author_name
+            generation_params["author_gender"] = author_gender
             logging.info(
-                f"Generated Author: Name='{generated_name}', Gender='{generated_gender}'"
+                f"Generated Author: Name='{author_name}', Gender='{author_gender}'"
             )
         else:
-            logging.error(
-                "Failed to auto-generate random author name. Checking config..."
+            logging.critical(
+                "Fatal: Failed to generate author name when both name and gender were missing. Exiting."
             )
-            # Fallback checks below handle this
-    # Ensure Author Name and Gender exist
+            sys.exit(1)
+
+    elif not author_name:
+        logging.info(
+            f"Author name missing. Generating name for specified gender: '{author_gender}'..."
+        )
+        if author_gender not in valid_genders:
+            logging.warning(
+                f"Provided gender '{author_gender}' is not standard ({valid_genders}). Attempting name generation anyway."
+            )
+            # Decide if you want to default the gender here or proceed. Let's proceed.
+
+        generated_name = generate_random_name(config, author_gender)  # API call
+        if generated_name:
+            author_name = generated_name
+            generation_params["author_name"] = author_name
+            logging.info(
+                f"Generated Author Name: '{author_name}' (Gender was '{author_gender}')"
+            )
+        else:
+            logging.critical(
+                f"Fatal: Failed to generate author name for gender '{author_gender}'. Exiting."
+            )
+            sys.exit(1)
+
+    elif not author_gender:
+        logging.info(
+            f"Author gender missing. Attempting to determine gender from name: '{author_name}'..."
+        )
+        determined_gender = determine_gender_from_name(config, author_name)  # API call
+        if determined_gender:
+            author_gender = determined_gender
+            generation_params["author_gender"] = author_gender
+            logging.info(
+                f"Determined Author Gender: '{author_gender}' (Name was '{author_name}')"
+            )
+        else:
+            # If determination fails, you need a fallback. Using 'other' or exiting are options.
+            logging.warning(
+                f"Could not determine gender for '{author_name}'. Falling back to 'other'."
+            )
+            author_gender = "other"
+            generation_params["author_gender"] = author_gender
+            # Or, make it critical:
+            # logging.critical(f"Fatal: Could not determine gender for name '{author_name}'. Exiting.")
+            # sys.exit(1)
+
+    else:
+        # Both name and gender were provided
+        logging.info(f"Using Author Name from config: '{author_name}'")
+        if author_gender not in valid_genders:
+            logging.warning(
+                f"Author gender ('{author_gender}') from config is not standard ({valid_genders}). Using it anyway."
+            )
+        logging.info(f"Using Author Gender from config: '{author_gender}'")
+
+    # Final check - ensure both have values before proceeding (should always pass if logic above is correct)
     if not generation_params.get("author_name"):
         logging.critical(
-            "Fatal: Author name missing and auto-generation failed/off. Exiting."
+            "Fatal: Author name is still missing after processing. Exiting."
         )
         sys.exit(1)
     if not generation_params.get("author_gender"):
         logging.critical(
-            "Fatal: Author gender missing and auto-generation failed/off. Exiting."
+            "Fatal: Author gender is still missing after processing. Exiting."
         )
         sys.exit(1)
-    # Validate gender
-    valid_genders = ["male", "female", "other"]
-    if generation_params["author_gender"].lower() not in valid_genders:
-        logging.warning(
-            f"Author gender ('{generation_params['author_gender']}') not in {valid_genders}. Using it anyway."
-        )
+
     logging.info(
-        f"Using Author: Name='{generation_params['author_name']}', Gender='{generation_params['author_gender']}'"
+        f"Final Author Details: Name='{generation_params['author_name']}', Gender='{generation_params['author_gender']}'"
     )
+    # --- End Author Name and Gender Determination ---
 
     # Determine Writing Tone
-    writing_tone = generation_params.get("writing_tone", DEFAULT_WRITING_TONE)
-    if generation_params.get("auto_generate_writing_tone", False):
-        logging.info("Configuration requests auto-generation of writing tone.")
+    # Check if writing_tone is provided and not empty in the config
+    writing_tone = generation_params.get("writing_tone", "").strip()
+
+    if not writing_tone:
+        # If not provided or empty, attempt to auto-generate it
+        logging.info(
+            "No 'writing_tone' found or it was empty in config. Attempting to auto-generate one."
+        )
         generated_tone = generate_writing_tone(config)  # API call
         if generated_tone:
             writing_tone = generated_tone
-            generation_params[
-                "writing_tone"
-            ] = generated_tone  # Update config in memory
-        else:
-            logging.warning(
-                f"Failed to auto-generate writing tone. Using config/default: '{writing_tone}'"
+            generation_params["writing_tone"] = (
+                generated_tone  # Update config in memory
             )
-    logging.info(f"Using writing tone: '{writing_tone}'")
-    # --- End Auto-generation ---
+            logging.info(f"Auto-generated writing tone: '{writing_tone}'")
+        else:
+            # If generation fails, fall back to the default
+            writing_tone = DEFAULT_WRITING_TONE
+            generation_params["writing_tone"] = (
+                writing_tone  # Store default back in config
+            )
+            logging.warning(
+                f"Failed to auto-generate writing tone. Using default: '{writing_tone}'"
+            )
+    else:
+        # If it was provided in the config, use that value
+        logging.info(f"Using writing_tone from config: '{writing_tone}'")
+
+    # Ensure writing_tone has a value (either from config, generated, or default)
+    if (
+        not writing_tone
+    ):  # Should ideally not happen due to fallback, but as a safeguard
+        writing_tone = DEFAULT_WRITING_TONE
+        generation_params["writing_tone"] = writing_tone
+        logging.warning(
+            f"Writing tone was still empty after checks. Using default: '{writing_tone}'"
+        )
+
+    logging.info(f"Final writing tone being used: '{writing_tone}'")
+    # --- End Writing Tone Determination ---
 
     # --- Generate Core Book Structure ---
     book_title = generate_book_title(config)  # API call
