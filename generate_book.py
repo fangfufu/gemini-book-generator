@@ -2562,21 +2562,29 @@ def assemble_docx(
         cp_text = front_matter["copyright_page"]
         # Split into paragraphs based on double line breaks in the original string
         cp_paragraphs = re.split(r"\n\s*\n", cp_text)
+
         # Add space before the first paragraph
         first_cp_p = doc.add_paragraph()
         first_cp_p.paragraph_format.space_before = Pt(60)
-        first_cp_p.add_run(cp_paragraphs[0].strip())
+
+        # FIX: Replace internal newlines with spaces before adding
+        first_para_text = re.sub(r"\s*\n\s*", " ", cp_paragraphs[0].strip())
+        first_cp_p.add_run(first_para_text)
+
         first_cp_p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
         # Apply smaller font size
         for run in first_cp_p.runs:
-            run.font.size = Pt(font_size - 2)
+            run.font.size = Pt(font_size - 2)  # Assuming font_size is defined
 
         # Add subsequent paragraphs
         for cp_para in cp_paragraphs[1:]:
-            p = doc.add_paragraph(cp_para.strip())
+            # FIX: Replace internal newlines with spaces before adding
+            para_text = re.sub(r"\s*\n\s*", " ", cp_para.strip())
+            p = doc.add_paragraph(para_text)
+
             p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
             for run in p.runs:
-                run.font.size = Pt(font_size - 2)
+                run.font.size = Pt(font_size - 2)  # Assuming font_size is defined
 
     # --- Section Break for Rest of Front Matter (Starts Section 2) ---
     doc.add_section(WD_SECTION.NEW_PAGE)
