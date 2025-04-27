@@ -29,9 +29,9 @@ from random_words import RandomWords
 
 # Configure Matplotlib to use LaTeX and load amsmath
 matplotlib.rcParams["text.usetex"] = True
-matplotlib.rcParams["text.latex.preamble"] = (
-    r"\usepackage{amsmath}  \usepackage{amssymb}"
-)
+matplotlib.rcParams[
+    "text.latex.preamble"
+] = r"\usepackage{amsmath}  \usepackage{amssymb}"
 
 # Ensure matplotlib doesn't try to use a GUI backend
 plt.switch_backend("Agg")
@@ -710,7 +710,10 @@ Do not add introductory text. Output in British English."""
 def generate_chapter_outline(config):
     """Generates a list of chapter titles."""
     logging.info("Generating chapter outline...")
-    prompt = f"""Generate a short list of chapter titles for a
+    length_modifier = (
+        config.get("generation_params", {}).get("length_modifier", "").strip()
+    )
+    prompt = f"""Generate a {length_modifier} short list of chapter titles for a
 book about '{config['generation_params']['main_topic']}'. The setting of the book
 is described as: {config['generation_params']['setting']}.
 Key concepts include: {', '.join(config['generation_params']['key_concepts'])}.
@@ -850,6 +853,10 @@ def generate_section_titles(
     all_summaries_context = "\n".join(all_summaries_context_parts)
     # --- End Context Preparation ---
 
+    length_modifier = (
+        config.get("generation_params", {}).get("length_modifier", "").strip()
+    )
+
     prompt = f"""
 Context for the entire book:
 Main Topic: '{config['generation_params']['main_topic']}'
@@ -864,7 +871,7 @@ Summaries of OTHER chapters (for context on what's covered elsewhere):
 
 ---
 Task:
-Generate a short list of relevant section titles specifically for the
+Generate a {length_modifier} short list of relevant section titles specifically for the
 chapter titled '{chapter_title}'.This chapter's specific summary is:
 "{chapter_summary}"
 
@@ -1006,8 +1013,9 @@ def generate_front_matter(
     }
 
     current_year = time.strftime("%Y")
-    front_matter["copyright_page"] = (
-        f"""
+    front_matter[
+        "copyright_page"
+    ] = f"""
 Copyright © {current_year} by {author_name}
 
 
@@ -1045,7 +1053,6 @@ a professional when appropriate. Neither the publisher nor the author shall be
 liable for any loss of profit or any other commercial damages, including but not
 limited to special, incidental, consequential, personal, or other damages.
 """.strip()
-    )
 
     common_prompt_base = f"""
 for the book '{book_title}' about {config['generation_params']['main_topic']}, with the setting:
@@ -2426,9 +2433,9 @@ def assemble_docx(
             title_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Title"].font.name = font_name
-            doc.styles["Title"].paragraph_format.alignment = (
-                WD_PARAGRAPH_ALIGNMENT.CENTER
-            )
+            doc.styles[
+                "Title"
+            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
         if "Subtitle" not in doc.styles:
             subtitle_style = doc.styles.add_style("Subtitle", WD_STYLE_TYPE.PARAGRAPH)
@@ -2440,9 +2447,9 @@ def assemble_docx(
             subtitle_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Subtitle"].font.name = font_name
-            doc.styles["Subtitle"].paragraph_format.alignment = (
-                WD_PARAGRAPH_ALIGNMENT.CENTER
-            )
+            doc.styles[
+                "Subtitle"
+            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
         # Ensure List Bullet exists (as before)
         if "List Bullet" not in doc.styles:
@@ -3166,9 +3173,9 @@ if __name__ == "__main__":
             logging.warning(
                 "Failed to auto-generate key concepts. Proceeding with an empty list."
             )
-            generation_params["key_concepts"] = (
-                []
-            )  # Ensure it's an empty list on failure
+            generation_params[
+                "key_concepts"
+            ] = []  # Ensure it's an empty list on failure
 
     # Final log of the count being used
     final_count = len(generation_params.get("key_concepts", []))
@@ -3283,16 +3290,16 @@ if __name__ == "__main__":
         generated_tone = generate_writing_tone(config)  # API call
         if generated_tone:
             writing_tone = generated_tone
-            generation_params["writing_tone"] = (
-                generated_tone  # Update config in memory
-            )
+            generation_params[
+                "writing_tone"
+            ] = generated_tone  # Update config in memory
             logging.info(f"Auto-generated writing tone: '{writing_tone}'")
         else:
             # If generation fails, fall back to the default
             writing_tone = DEFAULT_WRITING_TONE
-            generation_params["writing_tone"] = (
-                writing_tone  # Store default back in config
-            )
+            generation_params[
+                "writing_tone"
+            ] = writing_tone  # Store default back in config
             logging.warning(
                 f"Failed to auto-generate writing tone. Using default: '{writing_tone}'"
             )
