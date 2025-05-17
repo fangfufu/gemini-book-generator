@@ -29,9 +29,9 @@ from random_words import RandomWords
 
 # Configure Matplotlib to use LaTeX and load amsmath
 matplotlib.rcParams["text.usetex"] = True
-matplotlib.rcParams[
-    "text.latex.preamble"
-] = r"\usepackage{amsmath}  \usepackage{amssymb}"
+matplotlib.rcParams["text.latex.preamble"] = (
+    r"\usepackage{amsmath}  \usepackage{amssymb}"
+)
 
 # Ensure matplotlib doesn't try to use a GUI backend
 plt.switch_backend("Agg")
@@ -706,8 +706,207 @@ Do not add introductory text. Output in British English."""
         logging.warning("Failed to generate subtitle. No subtitle will be used.")
         return None
 
+def is_book_non_fiction(config, book_title):
+    """
+    Determines if the book is likely non-fiction using the Gemini API.
+    Returns True if likely non-fiction, False otherwise (fiction or indeterminate).
+    """
+    gen_params = config.get("generation_params", {})
+    main_topic = gen_params.get("main_topic", "[No Main Topic Provided]")
+    setting = gen_params.get("setting", "[No Setting Provided]")
+    key_concepts = gen_params.get("key_concepts", [])
 
-def generate_chapter_outline(config):
+    if main_topic == "[No Main Topic Provided]":
+        logging.warning(
+            "Cannot determine book type for character list decision: 'main_topic' is missing. "
+            "Assuming fiction to be safe and allow character generation if not explicitly disabled."
+        )
+        return False  # Default to fiction if not enough info
+
+    concepts_str = ", ".join(key_concepts) if key_concepts else "[No specific concepts provided]"
+
+    prompt = f"""
+Based on the following details of a book:
+- Title: '{book_title}'
+- Main Topic: '{main_topic}'
+- Setting: "{setting}"
+- Key Concepts: {concepts_str}
+
+Is this book most likely non-fiction?
+Answer with only 'yes' or 'no'. Do not add any explanations, quotation marks, or other text. Just the single word.
+"""
+    logging.info(f"Asking Gemini if book '{book_title}' is non-fiction for character list decision...")
+
+    # Create a cache prefix for this specific query
+    safe_title_prefix = sanitize_filename(book_title, 30)
+    cache_prefix = f"is_non_fiction_{safe_title_prefix}"
+
+    response_text = call_gemini_api(prompt, config, cache_prefix=cache_prefix)
+
+    if response_text:
+        answer = response_text.strip().lower()
+        if answer == "yes":
+            logging.info(f"Gemini indicates book '{book_title}' is likely non-fiction.")
+            return True
+        elif answer == "no":
+            logging.info(
+                f"Gemini indicates book '{book_title}' is likely fiction or its type is indeterminate."
+            )
+            return False
+        else:
+            logging.warning(
+                f"Unexpected response from Gemini for non-fiction check ('{response_text}'). "
+                "Assuming fiction to allow character generation."
+            )
+            return False
+    else:
+        logging.error(
+            f"Failed to get response from Gemini for non-fiction check for '{book_title}'. "
+            "Assuming fiction to allow character generation."
+        )
+        return False
+
+def generate_character_list(config, book_title):
+    """
+    Generates a list of character names and descriptions based on book details,
+    if enabled in the config or if the book is determined to be fiction.
+    """
+    gen_params = config.get("generation_params", {})
+    generate_explicit_setting = gen_params.get("generate_character_list", None)
+
+    # Decision logic for whether to proceed with generation attempt
+    proceed_with_generation_attempt = False
+    if generate_explicit_setting:
+        logging.info("Character list generation is explicitly enabled in config.")
+        proceed_with_generation_attempt = True
+    elif not generate_explicit_setting:
+        logging.info("Character list generation is explicitly disabled in config. Skipping.")
+        gen_params["character_list"] = None # Ensure key exists
+        return None
+    else:  # Not specified (None) or other non-boolean values
+        logging.info("'generate_character_list' not specified or invalid in config. Determining based on book type...")
+        if is_book_non_fiction(config, book_title): # New helper function
+            logging.info("Book identified as non-fiction by Gemini. Skipping character list generation.")
+            gen_params["character_list"] = None # Ensure key exists
+            return None
+        else:
+            logging.info("Book identified as fiction or type indeterminate by Gemini. Attempting character list generation.")
+            proceed_with_generation_attempt = True
+
+    if not proceed_with_generation_attempt:
+        # This path should ideally be covered by explicit False or non-fiction determination.
+        logging.warning("Decision was not to proceed with character list generation. Skipping.")
+        gen_params["character_list"] = None # Ensure key exists
+        return None
+
+    logging.info("Attempting to generate character list...")
+
+    main_topic = gen_params.get("main_topic", "[No Main Topic Provided]")
+    setting = gen_params.get("setting", "[No Setting Provided]")
+    key_concepts = gen_params.get("key_concepts", [])
+
+    # Critical prerequisites for character generation prompt
+    if (
+        main_topic == "[No Main Topic Provided]"
+        or setting == "[No Setting Provided]"
+        or not book_title # book_title is a direct argument
+    ):
+        logging.error(
+            "Cannot generate character list: 'main_topic', 'setting', or 'book_title' is missing/invalid. Skipping."
+        )
+        gen_params["character_list"] = None
+        return None
+
+    concepts_str = ", ".join(key_concepts) if key_concepts else "[No specific concepts]"
+
+    prompt = f"""
+Based on the book titled '{book_title}', which has the main topic '{main_topic}',
+a setting described as: "{setting}", and key concepts including: {concepts_str}.
+
+Generate a list of characters that might appear in such a book.
+For each character, provide their full name and a brief description
+of their role, personality, or significance within the context of the topic and setting.
+
+Format the output as a Markdown bulleted list. Each character should be an item.
+Start the item with the character's name in bold, followed by a colon, and then the description.
+
+Example:
+*   **Character Name One:** A brief description of this character's role or significance.
+*   **Another Character:** Their description and connection to the concepts.
+
+Provide *only* the Markdown list of characters. Do not add introductory text like "Here is the character list:".
+Output in British English.
+"""
+
+    character_list_text = call_gemini_api(prompt, config, cache_prefix="character_list")
+
+    if character_list_text:
+        cleaned_text = character_list_text.strip()
+        # Basic parsing: Split into lines and try to extract name/description
+        characters = []
+        for line in cleaned_text.split("\n"):
+            line = line.strip()
+            # Regex to capture bold name and the rest of the description
+            match = re.match(r"^\*\s*\*\*(.*?)\*\*:\s*(.*)", line)
+            if match:
+                name = match.group(1).strip()
+                description = match.group(2).strip()
+                if name and description:
+                    characters.append({"name": name, "description": description})
+            elif line.startswith("* "):  # Handle cases where bolding might fail
+                # Try a simpler split if regex fails but it looks like a list item
+                parts = line[2:].split(":", 1)
+                if len(parts) == 2 and parts[0].strip():
+                    name = parts[0].strip()
+                    description = parts[1].strip()
+                    characters.append({"name": name, "description": description})
+
+        if characters:
+            logging.info(
+                f"Successfully generated and parsed {len(characters)} characters."
+            )
+            # Store the parsed list in config
+            gen_params["character_list"] = characters
+
+            if characters:  # Check if the list is not empty
+                character_log_details = "\n".join(
+                    f"- {char.get('name', 'Unnamed')}: {char.get('description', 'No description')}"
+                    for char in characters
+                )
+                logging.info(f"Generated Characters:\n{character_log_details}")
+
+            return characters
+        else:
+            logging.warning(
+                f"Could not parse character list from API response. Response:\n{cleaned_text}"
+            )
+            gen_params["character_list"] = None
+            return None
+    else:
+        logging.error("Failed to generate character list via API.")
+        gen_params["character_list"] = None
+        return None
+
+
+# --- Helper function to format character list for prompts ---
+def format_character_list_for_prompt(character_list):
+    """Formats the character list into a string suitable for API prompts."""
+    if not character_list or not isinstance(character_list, list):
+        return ""  # Return empty string if no characters
+
+    formatted_items = []
+    for char in character_list:
+        if isinstance(char, dict) and "name" in char and "description" in char:
+            formatted_items.append(f"- {char['name']}: {char['description']}")
+        # Add handling for other potential formats if needed
+
+    if not formatted_items:
+        return ""
+
+    return "Key Characters:\n" + "\n".join(formatted_items) + "\n"
+
+
+def generate_chapter_outline(config, character_context=""):
     """Generates a list of chapter titles."""
     logging.info("Generating chapter outline...")
     length_modifier = (
@@ -717,7 +916,8 @@ def generate_chapter_outline(config):
 book about '{config['generation_params']['main_topic']}'. The setting of the book
 is described as: {config['generation_params']['setting']}.
 Key concepts include: {', '.join(config['generation_params']['key_concepts'])}.
-The chapters should logically progress through the topic.
+{character_context}
+The chapters should logically progress through the topic, potentially involving the key characters.
 Format the output as a numbered list, with each title on a new line.
 Start numbering from 1. Example:
 1. Chapter Title One
@@ -748,7 +948,11 @@ Output in British English."""
 
 
 def generate_chapter_summary(
-    config, chapter_title, writing_tone, previous_summaries_context=""
+    config,
+    chapter_title,
+    writing_tone,
+    previous_summaries_context="",
+    character_context="",
 ):
     """
     Generates a brief summary for a given chapter title, considering previous summaries.
@@ -768,6 +972,7 @@ def generate_chapter_summary(
         f"This chapter is part of a book about '{config['generation_params']['main_topic']}'.",
         f"The setting of the book is described as: {config['generation_params']['setting']}.",
         f"Key concepts: {', '.join(config['generation_params']['key_concepts'])}.",
+        f"{character_context}",
     ]
 
     # Conditionally add context about previous chapters
@@ -786,10 +991,11 @@ avoiding unnecessary repetition of themes or information already covered."""
     # Add remaining instructions
     prompt_parts.extend(
         [
-            f"""\nMaintain a tone that is {writing_tone}.",
-"Output only the summary text for the current chapter ('{chapter_title}'). 
-Do not add introductory text like 'This chapter summary is:'.",
-"Output in British English."""
+            f"""\nMaintain a tone that is {writing_tone}.
+{"Consider how the key characters might be involved or relevant to this chapter's summary." if character_context else ""},
+Output only the summary text for the current chapter ('{chapter_title}'). 
+Do not add introductory text like 'This chapter summary is:'.
+Output in British English."""
         ]
     )
 
@@ -826,8 +1032,9 @@ def generate_section_titles(
     config,
     chapter_title,
     chapter_summary,
-    all_chapter_titles,  # New parameter
-    all_chapter_summaries,  # New parameter
+    all_chapter_titles,
+    all_chapter_summaries,
+    character_context="",
 ):
     """
     Generates a list of section titles for a given chapter, using its summary
@@ -862,6 +1069,7 @@ Context for the entire book:
 Main Topic: '{config['generation_params']['main_topic']}'
 Setting: {config['generation_params']['setting']}
 Key Concepts: {', '.join(config['generation_params']['key_concepts'])}
+{character_context}
 
 Full Chapter Outline:
 {all_titles_context}
@@ -876,19 +1084,20 @@ chapter titled '{chapter_title}'.This chapter's specific summary is:
 "{chapter_summary}"
 
 Instructions:
-1. The section titles should logically break down the chapter's topic as 
+- The section titles should logically break down the chapter's topic as 
 described in *its specific summary*.
-2. Ensure the generated section titles are distinct and avoid significant 
+- Consider how the key characters might relate to these sections.
+- Ensure the generated section titles are distinct and avoid significant 
 overlap with topics clearly covered in the *summaries of other chapters* 
 provided above or topics strongly implied by the *titles of other chapters*.
-3. Format the output as a numbered list, with each title on a new line 
+- Format the output as a numbered list, with each title on a new line 
 (e.g., 1. Section Title One).
-4. Do not generate two-part section titles. The generated section titles must
+- Do not generate two-part section titles. The generated section titles must
 not contain subtitles.
-5. The section titles must not contain these punctuations: '-' or ':'.
-6. Do not use font formatting (e.g., bold, italics) in the section titles.
-7. Output *only* the numbered list of section titles. Do not add introductory text.
-8. Output in British English.
+- The section titles must not contain these punctuations: '-' or ':'.
+- Do not use font formatting (e.g., bold, italics) in the section titles.
+- Output *only* the numbered list of section titles. Do not add introductory text.
+- Output in British English.
 """
 
     prefix = f"section_titles_{sanitize_filename(chapter_title, max_length=40)}"
@@ -935,6 +1144,7 @@ def generate_section_content(
     total_sections,
     chapter_summary,
     writing_tone,
+    character_context="",
 ):
     """Generates content for a single section using Markdown, asking AI to use
     LaTeX math and avoid sub-headings."""
@@ -948,6 +1158,7 @@ Context:
 - Book Main Topic: '{config['generation_params']['main_topic']}'
 - Setting: {config['generation_params']['setting']}
 - Key Concepts: {', '.join(config['generation_params']['key_concepts'])}
+{"-" if character_context else ""}{character_context}
 - Current Chapter Title: '{chapter_title}'
 - Current Chapter Summary: "{chapter_summary}"
 - Current Section Title: '{section_title}'
@@ -960,20 +1171,20 @@ the topic defined by the section title ('{section_title}'). Ensure the content
 fits logically within the context provided by the chapter summary.
 
 Instructions:
-1.  Write approximately 2000 words for this section.
-2.  Output *only* the text content for this section.
-3.  Do *not* include the main chapter title or the section title in the output 
+- Write approximately 2000 words for this section.
+- Output *only* the text content for this section.
+- Do *not* include the main chapter title or the section title in the output 
 itself. Start directly with the section's content.
-4.  Format the output using standard Markdown (paragraphs, lists, bold, italics,
+- Format the output using standard Markdown (paragraphs, lists, bold, italics,
 tables).
-5.  CRITICAL: Ensure all bulleted or numbered lists are preceded by a blank line in the 
+- CRITICAL: Ensure all bulleted or numbered lists are preceded by a blank line in the 
 Markdown output.
-6.  Ensure paragraphs are separated by double line breaks in the Markdown source.
-7.  Do *not* include any Markdown sub-headings (like ## Heading Level 2 or 
+- Ensure paragraphs are separated by double line breaks in the Markdown source.
+- Do *not* include any Markdown sub-headings (like ## Heading Level 2 or 
 ### Heading Level 3).
-8.  If mathematical equations are necessary, format them using standard LaTeX 
+- If mathematical equations are necessary, format them using standard LaTeX 
 syntax: use $...$ for inline math and $$...$$ for display math.
-9. Write the entire output in British English.
+- Write the entire output in British English.
 """
     # --- End Refactored Prompt ---
 
@@ -1013,9 +1224,8 @@ def generate_front_matter(
     }
 
     current_year = time.strftime("%Y")
-    front_matter[
-        "copyright_page"
-    ] = f"""
+    front_matter["copyright_page"] = (
+        f"""
 Copyright © {current_year} by {author_name}
 
 
@@ -1053,19 +1263,20 @@ a professional when appropriate. Neither the publisher nor the author shall be
 liable for any loss of profit or any other commercial damages, including but not
 limited to special, incidental, consequential, personal, or other damages.
 """.strip()
+    )
 
     common_prompt_base = f"""
 for the book '{book_title}' about {config['generation_params']['main_topic']}, with the setting:
 {config['generation_params']['setting']}. {summary_context}
-Maintain a tone that is {writing_tone}.
+Maintain a tone that is {writing_tone}. The author of this book is {author_name}.
 Output *only* the text content for this section. Do not add introductory text.
 Output in British English.
 """
     fm_elements_prompts = {
         "Dedication": f"Write an inspiring dedication {common_prompt_base}",
-        "Foreword": f"Write a Foreword by a fictional expert relevant to the book's topic {common_prompt_base}. Make sure this fictional expert provides their name and credential at the end. Discuss the book's significance or context.",
-        "Preface": f"Write a Preface {common_prompt_base}. The author of this book is {author_name}. {author_name} explains their motivation or the book's scope.",
-        "Acknowledgements": f"Write an Acknowledgements {common_prompt_base}. The author of this book is {author_name}. {author_name} thanks individuals and groups who contributed.",
+        "Foreword": f"Write a Foreword by a fictional expert relevant {common_prompt_base}. Make sure this fictional expert provides their name and credential at the end. Discuss the book's significance or context.",
+        "Preface": f"Write a Preface {common_prompt_base}.  {author_name} explains their motivation or the book's scope.",
+        "Acknowledgements": f"Write an Acknowledgements {common_prompt_base}. {author_name} thanks individuals and groups who contributed.",
     }
     for element, prompt in fm_elements_prompts.items():
         logging.info(f"Generating {element}...")
@@ -2193,12 +2404,15 @@ def markdown_to_docx(
 
         # --- HTML Cleaning Step ---
         parser = html.HTMLParser(encoding="utf-8")
+        # Wrap in a div to ensure a single root for parsing potentially fragmented HTML
         html_wrapper_str = f"<div>{html_content}</div>"
         try:
+            # Use utf-8 encoding for parsing
             html_tree_root = html.fromstring(
                 html_wrapper_str.encode("utf-8"), parser=parser
             )
         except UnicodeDecodeError:
+            # Fallback if utf-8 fails (less common but possible)
             logging.warning(
                 "UTF-8 decoding failed for HTML string, trying 'latin-1' fallback."
             )
@@ -2206,31 +2420,38 @@ def markdown_to_docx(
                 html_wrapper_str.encode("latin-1"), parser=parser
             )
 
-        # --- (Keep <p> tag cleaning logic as is) ---
+        # Find <p> tags that are either completely empty or contain only <br> tags and whitespace
         paragraphs_to_remove = []
+        # Iterate through all <p> tags in the parsed HTML tree
         for p_tag in html_tree_root.xpath(".//p"):
+            # Get the text content of the <p> tag, stripping leading/trailing whitespace
             text_content = p_tag.text_content().strip()
+            # Get all direct children elements of the <p> tag
             children = p_tag.getchildren()
-            only_br_children = True
-            if not children:
-                only_br_children = False
-            else:
+
+            # Check condition 1: Is the paragraph completely empty (no text, no children)?
+            is_completely_empty = not text_content and not children
+
+            # Check condition 2: Does the paragraph contain ONLY <br> tags (and whitespace)?
+            only_br_children = False
+            if not text_content and children:  # Only check children if there's no text
+                all_children_are_br = True
                 for child in children:
+                    # If any child is not a <br> tag, this condition is false
                     if child.tag != "br":
-                        only_br_children = False
+                        all_children_are_br = False
                         break
-            if not text_content and only_br_children:
+                only_br_children = all_children_are_br  # True if all children were <br>
+
+            # If either condition is met, schedule the paragraph for removal
+            if is_completely_empty or only_br_children:
                 logging.debug(
-                    f"Found <p> tag containing only <br> tags (or empty). Scheduling for removal. "
+                    f"Found <p> tag {'empty' if is_completely_empty else 'containing only <br> tags'}. Scheduling for removal. "
                     f"HTML snippet: {html.tostring(p_tag, encoding='unicode', pretty_print=False)[:100]}"
                 )
                 paragraphs_to_remove.append(p_tag)
-            elif not text_content and not children:
-                logging.debug(
-                    f"Found completely empty <p> tag. Scheduling for removal."
-                )
-                paragraphs_to_remove.append(p_tag)
 
+        # Remove the identified paragraphs
         if paragraphs_to_remove:
             logging.info(
                 f"Removing {len(paragraphs_to_remove)} empty or <br>-only <p> tags."
@@ -2238,14 +2459,18 @@ def markdown_to_docx(
             for p_tag in paragraphs_to_remove:
                 parent = p_tag.getparent()
                 if parent is not None:
+                    # Preserve tail text if it exists, attaching it to the previous sibling or parent text
                     if p_tag.tail and p_tag.tail.strip():
                         previous_sibling = p_tag.getprevious()
                         if previous_sibling is not None:
+                            # Append tail to the previous sibling's tail
                             previous_sibling.tail = (
                                 previous_sibling.tail or ""
                             ) + p_tag.tail
                         else:
+                            # Append tail to the parent's text if no previous sibling
                             parent.text = (parent.text or "") + p_tag.tail
+                    # Remove the paragraph tag itself
                     parent.remove(p_tag)
         # --- End HTML Cleaning Step ---
 
@@ -2433,9 +2658,9 @@ def assemble_docx(
             title_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Title"].font.name = font_name
-            doc.styles[
-                "Title"
-            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            doc.styles["Title"].paragraph_format.alignment = (
+                WD_PARAGRAPH_ALIGNMENT.CENTER
+            )
 
         if "Subtitle" not in doc.styles:
             subtitle_style = doc.styles.add_style("Subtitle", WD_STYLE_TYPE.PARAGRAPH)
@@ -2447,9 +2672,9 @@ def assemble_docx(
             subtitle_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Subtitle"].font.name = font_name
-            doc.styles[
-                "Subtitle"
-            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            doc.styles["Subtitle"].paragraph_format.alignment = (
+                WD_PARAGRAPH_ALIGNMENT.CENTER
+            )
 
         # Ensure List Bullet exists (as before)
         if "List Bullet" not in doc.styles:
@@ -2949,6 +3174,25 @@ def assemble_marketing_docx(
     else:
         doc.add_paragraph("[None Specified]")
 
+    # --- Add Character List (if generated) ---
+    character_list = gen_params.get("character_list")
+    if character_list:
+        doc.add_paragraph("Key Characters", style="Heading 2")
+        list_style = (
+            doc.styles["List Bullet"]
+            if "List Bullet" in doc.styles
+            else doc.styles["Normal"]
+        )
+        for char in character_list:
+            if isinstance(char, dict) and "name" in char and "description" in char:
+                # Add name in bold, then description
+                p = doc.add_paragraph(style=list_style)
+                p.add_run(f"{char['name']}: ").bold = True
+                p.add_run(char["description"])
+            else:  # Fallback for unexpected format
+                doc.add_paragraph(str(char), style=list_style)
+    # --- End Character List ---
+
     doc.add_paragraph("Author Details:", style="Heading 2")
     doc.add_paragraph(f"Name: {gen_params.get('author_name', '[Not Specified]')}")
     doc.add_paragraph(f"Gender: {gen_params.get('author_gender', '[Not Specified]')}")
@@ -3080,8 +3324,15 @@ if __name__ == "__main__":
     topic_hash = hashlib.sha1(main_topic.encode("utf-8")).hexdigest()[:8]
     topic_dir_name = f"{sanitized_topic}_{topic_hash}"
 
+    # --- Get and sanitize the model name ---
+    model_name = config.get("gemini_model", "unknown_model")
+    # Sanitize the model name to make it directory-safe, limit length
+    sanitized_model_name = sanitize_filename(model_name, 30)
+    logging.info(f"Using model name for cache path: '{sanitized_model_name}'")
+
+    # --- Create the cache path including the model name ---
     topic_specific_cache_dir = (
-        pathlib.Path(base_cache_dir) / topic_dir_name
+        pathlib.Path(base_cache_dir) / sanitized_model_name / topic_dir_name
     )  # Use pathlib
     logging.info(f"Topic-specific cache directory set to: {topic_specific_cache_dir}")
     # Update the config dictionary IN MEMORY so subsequent calls use the right path
@@ -3092,6 +3343,7 @@ if __name__ == "__main__":
     topic_specific_cache_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Define and Create Equation Image Directory HERE ---
+    # Place equation images within the topic-specific, model-specific cache dir
     equation_image_dir = topic_specific_cache_dir / "equation_images"
     equation_image_dir.mkdir(parents=True, exist_ok=True)
     logging.info(f"Equation image directory set to: {equation_image_dir}")
@@ -3173,9 +3425,9 @@ if __name__ == "__main__":
             logging.warning(
                 "Failed to auto-generate key concepts. Proceeding with an empty list."
             )
-            generation_params[
-                "key_concepts"
-            ] = []  # Ensure it's an empty list on failure
+            generation_params["key_concepts"] = (
+                []
+            )  # Ensure it's an empty list on failure
 
     # Final log of the count being used
     final_count = len(generation_params.get("key_concepts", []))
@@ -3290,16 +3542,16 @@ if __name__ == "__main__":
         generated_tone = generate_writing_tone(config)  # API call
         if generated_tone:
             writing_tone = generated_tone
-            generation_params[
-                "writing_tone"
-            ] = generated_tone  # Update config in memory
+            generation_params["writing_tone"] = (
+                generated_tone  # Update config in memory
+            )
             logging.info(f"Auto-generated writing tone: '{writing_tone}'")
         else:
             # If generation fails, fall back to the default
             writing_tone = DEFAULT_WRITING_TONE
-            generation_params[
-                "writing_tone"
-            ] = writing_tone  # Store default back in config
+            generation_params["writing_tone"] = (
+                writing_tone  # Store default back in config
+            )
             logging.warning(
                 f"Failed to auto-generate writing tone. Using default: '{writing_tone}'"
             )
@@ -3324,7 +3576,19 @@ if __name__ == "__main__":
     book_title = generate_book_title(config)  # API call
     logging.info(f"Successfully generated Book Title: {book_title}")
 
-    chapter_titles = generate_chapter_outline(config)  # API call
+    # --- Generate Character List (if enabled) ---
+    # This needs book_title, topic, setting, concepts
+    generate_character_list(config, book_title)  # API call inside if enabled
+    # The result (or None) is stored in config['generation_params']['character_list']
+
+    # --- Generate Chapter Outline (potentially using characters) ---
+    # Prepare character context string
+    character_context_for_prompts = format_character_list_for_prompt(
+        config["generation_params"].get("character_list")
+    )
+
+    chapter_titles = generate_chapter_outline(config, character_context_for_prompts)
+
     if chapter_titles:
         formatted_outline = "\n".join(
             f"{i+1}. {title}" for i, title in enumerate(chapter_titles)
@@ -3361,7 +3625,8 @@ if __name__ == "__main__":
             config,
             chap_title,
             writing_tone,
-            previous_summaries_context,  # Pass the context here
+            previous_summaries_context,
+            character_context_for_prompts,
         )
         chapter_summaries[chap_title] = summary
 
@@ -3448,7 +3713,8 @@ if __name__ == "__main__":
             chapter_summary,
             chapter_titles,
             chapter_summaries,
-        )  # API call
+            character_context_for_prompts,
+        )
         body_matter[chap_title] = []
 
         if not section_titles:
@@ -3473,7 +3739,8 @@ if __name__ == "__main__":
                 len(section_titles),
                 chapter_summary,
                 writing_tone,
-            )  # API call (with specific prefix)
+                character_context_for_prompts,
+            )
             body_matter[chap_title].append(
                 {"title": sec_title, "content": section_content}
             )
