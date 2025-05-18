@@ -1005,13 +1005,13 @@ def generate_character_list(config, book_title):
         )
         if is_book_non_fiction(config, book_title):  # New helper function
             logging.info(
-                "Book identified as non-fiction by Gemini. Skipping character list generation."
+                "Book identified as non-fiction by LLM. Skipping character list generation."
             )
             gen_params["character_list"] = None  # Ensure key exists
             return None
         else:
             logging.info(
-                "Book identified as fiction or type indeterminate by Gemini. Attempting character list generation."
+                "Book identified as fiction or type indeterminate by LLM. Attempting character list generation."
             )
             proceed_with_generation_attempt = True
 

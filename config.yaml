@@ -81,7 +81,7 @@ api_settings:
   ollama:
     base_url: "http://localhost:11434" # Your Ollama server address
     model: "gemma3:12b"                    # The Ollama model you want to use
-    temperature: 0.7
+    temperature: 0.0
     # To use Ollama-specific retries different from default:
     # max_retries: 3
     # retry_delay_seconds: 5
