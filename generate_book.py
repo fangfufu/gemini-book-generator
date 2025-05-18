@@ -631,7 +631,7 @@ def generate_key_concepts(config):
     prompt = f"""Based on the main topic '{main_topic}' in a setting described as:
 "{setting}"
 
-Generate a short list of distinct and relevant key concepts or
+Generate a list of distinct and relevant key concepts or
 terms that would be central to exploring this topic within the setting.
 
 Format the output as a simple comma-separated list. Example:
@@ -706,14 +706,33 @@ Do not add introductory text. Output in British English."""
         logging.warning("Failed to generate subtitle. No subtitle will be used.")
         return None
 
+
 def is_book_non_fiction(config, book_title):
     """
     Determines if the book is likely non-fiction using the Gemini API.
+    Caches the result in config['generation_params']['is_fiction'].
     Returns True if likely non-fiction, False otherwise (fiction or indeterminate).
     """
-    gen_params = config.get("generation_params", {})
+    gen_params = config.setdefault(
+        "generation_params", {}
+    )  # Ensure gen_params exists and can be modified
+
+    # Check if 'is_fiction' is already determined and cached
+    if "is_fiction" in gen_params and isinstance(gen_params["is_fiction"], bool):
+        is_fiction_cached = gen_params["is_fiction"]
+        logging.info(
+            f"Using cached 'is_fiction' status for book '{book_title}': {is_fiction_cached}. "
+            f"Returning non-fiction status: {not is_fiction_cached}."
+        )
+        return (
+            not is_fiction_cached
+        )  # True if non-fiction (is_fiction is False), False if fiction (is_fiction is True)
+
+    # If not cached, proceed with API call
     main_topic = gen_params.get("main_topic", "[No Main Topic Provided]")
-    setting = gen_params.get("setting", "[No Setting Provided]")
+    setting = gen_params.get(
+        "setting", "[No Setting Provided]"
+    )  # Corrected variable name
     key_concepts = gen_params.get("key_concepts", [])
 
     if main_topic == "[No Main Topic Provided]":
@@ -721,9 +740,13 @@ def is_book_non_fiction(config, book_title):
             "Cannot determine book type for character list decision: 'main_topic' is missing. "
             "Assuming fiction to be safe and allow character generation if not explicitly disabled."
         )
-        return False  # Default to fiction if not enough info
+        # Store this assumption and return
+        gen_params["is_fiction"] = True  # Assume fiction
+        return False  # is_book_non_fiction returns False for fiction
 
-    concepts_str = ", ".join(key_concepts) if key_concepts else "[No specific concepts provided]"
+    concepts_str = (
+        ", ".join(key_concepts) if key_concepts else "[No specific concepts provided]"
+    )
 
     prompt = f"""
 Based on the following details of a book:
@@ -735,7 +758,9 @@ Based on the following details of a book:
 Is this book most likely non-fiction?
 Answer with only 'yes' or 'no'. Do not add any explanations, quotation marks, or other text. Just the single word.
 """
-    logging.info(f"Asking Gemini if book '{book_title}' is non-fiction for character list decision...")
+    logging.info(
+        f"Asking Gemini if book '{book_title}' is non-fiction for character list decision..."
+    )
 
     # Create a cache prefix for this specific query
     safe_title_prefix = sanitize_filename(book_title, 30)
@@ -743,28 +768,40 @@ Answer with only 'yes' or 'no'. Do not add any explanations, quotation marks, or
 
     response_text = call_gemini_api(prompt, config, cache_prefix=cache_prefix)
 
+    determined_is_non_fiction = False  # Default to fiction/indeterminate if API fails or gives unexpected response
     if response_text:
         answer = response_text.strip().lower()
         if answer == "yes":
             logging.info(f"Gemini indicates book '{book_title}' is likely non-fiction.")
-            return True
+            determined_is_non_fiction = True
         elif answer == "no":
             logging.info(
                 f"Gemini indicates book '{book_title}' is likely fiction or its type is indeterminate."
             )
-            return False
+            determined_is_non_fiction = False
         else:
             logging.warning(
                 f"Unexpected response from Gemini for non-fiction check ('{response_text}'). "
-                "Assuming fiction to allow character generation."
+                "Treating as fiction/indeterminate."
             )
-            return False
+            # determined_is_non_fiction remains False
     else:
         logging.error(
             f"Failed to get response from Gemini for non-fiction check for '{book_title}'. "
-            "Assuming fiction to allow character generation."
+            "Treating as fiction/indeterminate."
         )
-        return False
+        # determined_is_non_fiction remains False
+
+    # Cache the 'is_fiction' status
+    # If determined_is_non_fiction is True (book is non-fiction), then gen_params['is_fiction'] should be False.
+    # If determined_is_non_fiction is False (book is fiction/indeterminate), then gen_params['is_fiction'] should be True.
+    gen_params["is_fiction"] = not determined_is_non_fiction
+    logging.info(
+        f"Stored 'is_fiction': {gen_params['is_fiction']} in generation_params for '{book_title}'."
+    )
+
+    return determined_is_non_fiction
+
 
 def generate_character_list(config, book_title):
     """
@@ -779,24 +816,34 @@ def generate_character_list(config, book_title):
     if generate_explicit_setting:
         logging.info("Character list generation is explicitly enabled in config.")
         proceed_with_generation_attempt = True
-    elif not generate_explicit_setting:
-        logging.info("Character list generation is explicitly disabled in config. Skipping.")
-        gen_params["character_list"] = None # Ensure key exists
+    elif generate_explicit_setting is not None:
+        logging.info(
+            "Character list generation is explicitly disabled in config. Skipping."
+        )
+        gen_params["character_list"] = None  # Ensure key exists
         return None
     else:  # Not specified (None) or other non-boolean values
-        logging.info("'generate_character_list' not specified or invalid in config. Determining based on book type...")
-        if is_book_non_fiction(config, book_title): # New helper function
-            logging.info("Book identified as non-fiction by Gemini. Skipping character list generation.")
-            gen_params["character_list"] = None # Ensure key exists
+        logging.info(
+            "'generate_character_list' not specified or invalid in config. Determining based on book type..."
+        )
+        if is_book_non_fiction(config, book_title):  # New helper function
+            logging.info(
+                "Book identified as non-fiction by Gemini. Skipping character list generation."
+            )
+            gen_params["character_list"] = None  # Ensure key exists
             return None
         else:
-            logging.info("Book identified as fiction or type indeterminate by Gemini. Attempting character list generation.")
+            logging.info(
+                "Book identified as fiction or type indeterminate by Gemini. Attempting character list generation."
+            )
             proceed_with_generation_attempt = True
 
     if not proceed_with_generation_attempt:
         # This path should ideally be covered by explicit False or non-fiction determination.
-        logging.warning("Decision was not to proceed with character list generation. Skipping.")
-        gen_params["character_list"] = None # Ensure key exists
+        logging.warning(
+            "Decision was not to proceed with character list generation. Skipping."
+        )
+        gen_params["character_list"] = None  # Ensure key exists
         return None
 
     logging.info("Attempting to generate character list...")
@@ -809,7 +856,7 @@ def generate_character_list(config, book_title):
     if (
         main_topic == "[No Main Topic Provided]"
         or setting == "[No Setting Provided]"
-        or not book_title # book_title is a direct argument
+        or not book_title  # book_title is a direct argument
     ):
         logging.error(
             "Cannot generate character list: 'main_topic', 'setting', or 'book_title' is missing/invalid. Skipping."
@@ -823,7 +870,7 @@ def generate_character_list(config, book_title):
 Based on the book titled '{book_title}', which has the main topic '{main_topic}',
 a setting described as: "{setting}", and key concepts including: {concepts_str}.
 
-Generate a list of characters that might appear in such a book.
+Generate a long list of characters that might appear in such a book.
 For each character, provide their full name and a brief description
 of their role, personality, or significance within the context of the topic and setting.
 
@@ -912,12 +959,26 @@ def generate_chapter_outline(config, character_context=""):
     length_modifier = (
         config.get("generation_params", {}).get("length_modifier", "").strip()
     )
-    prompt = f"""Generate a {length_modifier} short list of chapter titles for a
+    is_fiction = config.get("generation_params", {}).get("is_fiction", False)
+
+    # Prepare the length_modifier part with a trailing space if it exists
+    # e.g., "very " or ""
+    actual_length_modifier_segment = f"{length_modifier} " if length_modifier else ""
+
+    if not is_fiction:  # Non-fiction: include "short"
+        # Examples: "very short list", "short list"
+        list_description_for_prompt = f"{actual_length_modifier_segment}short list"
+    else:  # Fiction: omit "short"
+        # Examples: "very list", "list"
+        list_description_for_prompt = f"{actual_length_modifier_segment}long list"
+
+    prompt = f"""Generate a {list_description_for_prompt} of chapter titles for a
 book about '{config['generation_params']['main_topic']}'. The setting of the book
 is described as: {config['generation_params']['setting']}.
 Key concepts include: {', '.join(config['generation_params']['key_concepts'])}.
 {character_context}
 The chapters should logically progress through the topic, potentially involving the key characters.
+Ensure the list of chapter titles is appropriate for the type of book (fiction/non-fiction).
 Format the output as a numbered list, with each title on a new line.
 Start numbering from 1. Example:
 1. Chapter Title One
@@ -3576,6 +3637,24 @@ if __name__ == "__main__":
     book_title = generate_book_title(config)  # API call
     logging.info(f"Successfully generated Book Title: {book_title}")
 
+    # --- Determine if the book is fiction ---
+    # This call will now use internal caching and set generation_params["is_fiction"]
+    is_book_non_fiction(
+        config, book_title
+    )  # Ensures generation_params["is_fiction"] is set
+
+    if generation_params.get(
+        "is_fiction", False
+    ):  # Default to False (non-fiction) if key is somehow missing
+        logging.info(
+            f"Book '{book_title}' has been identified as fiction. Detailed section generation within chapters will be skipped; chapter content will be generated as a single block."
+        )
+    else:
+        logging.info(
+            f"Book '{book_title}' has been identified as non-fiction (or type indeterminate, proceeding with detailed sections). Detailed sections will be generated within chapters."
+        )
+    # --- End Fiction Determination ---
+
     # --- Generate Character List (if enabled) ---
     # This needs book_title, topic, setting, concepts
     generate_character_list(config, book_title)  # API call inside if enabled
@@ -3700,54 +3779,93 @@ if __name__ == "__main__":
     # --- Pass 2: Generate Section Content (using summaries) ---
     logging.info("--- Starting Pass 2: Generating Section Content ---")
     body_matter = {}
+    is_fiction_book = generation_params.get("is_fiction", False)  # Get the flag
+
     for i, chap_title in enumerate(chapter_titles):
         logging.info(f"--- Processing Chapter {i+1}: {chap_title} ---")
         chapter_summary = chapter_summaries.get(
             chap_title, f"Placeholder summary for chapter '{chap_title}'."
         )  # Use placeholder if missing
+        body_matter[chap_title] = []  # Initialize with empty list for sections
 
-        # --- Call generate_section_titles with added context ---
-        section_titles = generate_section_titles(
-            config,
-            chap_title,
-            chapter_summary,
-            chapter_titles,
-            chapter_summaries,
-            character_context_for_prompts,
-        )
-        body_matter[chap_title] = []
-
-        if not section_titles:
-            logging.warning(
-                f"No section titles generated for chapter '{chap_title}'. Skipping content generation for this chapter."
-            )
-            continue  # Skip to next chapter
-        else:
-            formatted_sections = "\n".join(
-                f"  {j+1}. {title}" for j, title in enumerate(section_titles)
-            )
+        if is_fiction_book:
             logging.info(
-                f"Generated {len(section_titles)} section titles for chapter '{chap_title}':\n{formatted_sections}"
+                f"Book is fiction. Generating content for chapter '{chap_title}' as a single block."
             )
-
-        for j, sec_title in enumerate(section_titles):
-            section_content = generate_section_content(
+            # Use a generic title for the single content block of a fiction chapter
+            fiction_section_title = "Narrative"  # Or "Chapter Content"
+            chapter_content_as_single_block = generate_section_content(
                 config,
-                chap_title,
-                sec_title,
-                j + 1,
-                len(section_titles),
+                chap_title,  # chapter_title
+                fiction_section_title,  # section_title (generic for fiction)
+                1,  # section_num
+                1,  # total_sections
                 chapter_summary,
                 writing_tone,
                 character_context_for_prompts,
             )
             body_matter[chap_title].append(
-                {"title": sec_title, "content": section_content}
+                {
+                    "title": fiction_section_title,
+                    "content": chapter_content_as_single_block,
+                }
             )
-            if not section_content or "Content generation failed" in section_content:
+            if (
+                not chapter_content_as_single_block
+                or "Content generation failed" in chapter_content_as_single_block
+            ):
                 logging.warning(
-                    f"Content generation potentially failed for Chapter '{chap_title}', Section '{sec_title}'."
+                    f"Content generation potentially failed for fiction chapter '{chap_title}' (treated as single section)."
                 )
+        else:  # Non-fiction book, proceed with normal section generation
+            # --- Call generate_section_titles with added context ---
+            section_titles = generate_section_titles(
+                config,
+                chap_title,
+                chapter_summary,
+                chapter_titles,
+                chapter_summaries,
+                character_context_for_prompts,
+            )
+
+            if not section_titles:
+                logging.warning(
+                    f"No section titles generated for chapter '{chap_title}'. Adding chapter summary as placeholder content."
+                )
+                # Add chapter summary as content if no sections are generated
+                body_matter[chap_title].append(
+                    {"title": "Chapter Overview", "content": chapter_summary}
+                )
+                continue  # Skip to next chapter
+            else:
+                formatted_sections = "\n".join(
+                    f"  {j+1}. {title}" for j, title in enumerate(section_titles)
+                )
+                logging.info(
+                    f"Generated {len(section_titles)} section titles for chapter '{chap_title}':\n{formatted_sections}"
+                )
+
+            for j, sec_title in enumerate(section_titles):
+                section_content = generate_section_content(
+                    config,
+                    chap_title,
+                    sec_title,
+                    j + 1,
+                    len(section_titles),
+                    chapter_summary,
+                    writing_tone,
+                    character_context_for_prompts,
+                )
+                body_matter[chap_title].append(
+                    {"title": sec_title, "content": section_content}
+                )
+                if (
+                    not section_content
+                    or "Content generation failed" in section_content
+                ):
+                    logging.warning(
+                        f"Content generation potentially failed for Chapter '{chap_title}', Section '{sec_title}'."
+                    )
 
     logging.info("Finished generating all body matter.")
 
