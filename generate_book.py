@@ -335,6 +335,9 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
     # safety_settings would be fetched from gemini_conf if specified in config.yaml under api_settings.gemini
     safety_settings = gemini_conf.get("safety_settings", None)
 
+    verbose_debug = config.get("debug_options", {}).get("verbose_debug", False)
+    stream_gemini = verbose_debug # Specifically for Gemini streaming if verbose_debug is on
+
     try:
         model = genai.GenerativeModel(model_name)
         generation_config = genai.types.GenerationConfig(temperature=temperature)
@@ -345,46 +348,74 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                     prompt,
                     generation_config=generation_config,
                     safety_settings=safety_settings,
+                    stream=stream_gemini,
                 )
 
-                response_text = None  # Initialize
-                if response.parts:
-                    response_text = response.text
-                elif response.prompt_feedback and response.prompt_feedback.block_reason:
-                    logging.warning(
-                        f"API call blocked. Reason: {response.prompt_feedback.block_reason}"
-                    )
-                    # response_text remains None
-                else:
-                    # Check finish reason even if parts are empty
-                    finish_reason = "UNKNOWN"
-                    try:
-                        # Access finish_reason safely
-                        if response.candidates:
-                            finish_reason = response.candidates[
-                                0
-                            ].finish_reason.name  # Use .name for enum
-                    except (AttributeError, IndexError):
+                if stream_gemini:
+                    logging.info(f"Streaming Gemini response for model '{model_name}':")
+                    full_response_text_parts = []
+                    print(f"\n--- Gemini Stream ({model_name}) ---")
+                    for chunk in response:
+                        if chunk.parts:
+                            response_part = chunk.text
+                            print(response_part, end="", flush=True) # Stream to console
+                            full_response_text_parts.append(response_part)
+                        elif chunk.prompt_feedback and chunk.prompt_feedback.block_reason:
+                            logging.warning(
+                                f"Gemini API stream blocked. Reason: {chunk.prompt_feedback.block_reason}"
+                            )
+                            print(f"\n--- End Gemini Stream (Blocked) ---")
+                            return None # Blocked, don't retry
+                        # We don't typically get 'done' in the same way as Ollama,
+                        # the stream just ends. The loop finishing means it's done.
+
+                    print(f"\n--- End Gemini Stream (Done) ---")
+                    logging.info(f"Gemini API stream completed for model '{model_name}'.")
+                    final_text = "".join(full_response_text_parts).strip()
+                    return final_text
+                else: # Not streaming
+                    response_text = None  # Initialize
+                    if response.parts:
+                        response_text = response.text
+                    elif response.prompt_feedback and response.prompt_feedback.block_reason:
                         logging.warning(
-                            "Could not determine finish reason from response."
+                            f"API call blocked. Reason: {response.prompt_feedback.block_reason}"
                         )
+                        # response_text remains None
+                    else:
+                        # Check finish reason even if parts are empty
+                        finish_reason = "UNKNOWN"
+                        try:
+                            # Access finish_reason safely
+                            if response.candidates:
+                                finish_reason = response.candidates[
+                                    0
+                                ].finish_reason.name  # Use .name for enum
+                        except (AttributeError, IndexError):
+                            logging.warning(
+                                "Could not determine finish reason from response."
+                            )
 
-                    logging.warning(
-                        f"API call returned no content or parts. Finish Reason: {finish_reason}"
-                    )
-                    # response_text remains None
+                        logging.warning(
+                            f"API call returned no content or parts. Finish Reason: {finish_reason}"
+                        )
+                        # response_text remains None
 
-                if response_text is not None:  # Check if we got valid text
-                    # Logging success specific to Gemini
-                    logging.info(f"Gemini API call successful for model {model_name}.")
-                    return response_text
-                else:
-                    logging.warning(
-                        f"API attempt {attempt + 1} failed (blocked or no content)."
-                    )
+                    if response_text is not None:  # Check if we got valid text
+                        # Logging success specific to Gemini
+                        logging.info(f"Gemini API call successful for model {model_name}.")
+                        return response_text
+                    else:
+                        logging.warning(
+                            f"API attempt {attempt + 1} failed (blocked or no content)."
+                        )
 
             except Exception as e:
                 logging.warning(f"Gemini API call attempt {attempt + 1} for model {model_name} failed: {e}")
+                # Specific error handling for Gemini if needed, e.g., quota errors
+                if "quota" in str(e).lower(): # Basic check for quota issues
+                    logging.error(f"Gemini API quota likely exceeded: {e}")
+                    return None # Don't retry quota issues immediately
 
             if attempt < max_retries - 1:
                 logging.info(f"Retrying Gemini API call in {retry_delay} seconds...")
@@ -424,13 +455,15 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
     retry_delay = int(ollama_config.get("retry_delay_seconds", default_retry_delay))
     request_timeout = int(ollama_config.get("request_timeout_seconds", 120)) # Default 2 mins
     api_url = f"{base_url.rstrip('/')}/api/generate"
+
+    verbose_debug = config.get("debug_options", {}).get("verbose_debug", False)
+    stream_ollama = verbose_debug # Specifically for Ollama streaming if verbose_debug is on
+
     payload = {
         "model": model_name,
         "prompt": prompt,
-        "stream": False, # Keep it simple, no streaming for now
-        "options": {
-            "temperature": temperature
-        }
+        "stream": stream_ollama,
+        "options": {"temperature": temperature},
     }
 
     for attempt in range(max_retries):
@@ -440,23 +473,60 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                 headers={"Content-Type": "application/json"},
                 json=payload,
                 timeout=request_timeout,
+                stream=stream_ollama,  # Pass stream=True to requests.post if streaming
             )
             response.raise_for_status()  # Raises HTTPError for bad responses (4XX, 5XX)
 
-            response_data = response.json()
+            if stream_ollama:
+                logging.info(f"Streaming Ollama response for model '{model_name}':")
+                full_response_text_parts = []
+                print(f"\n--- Ollama Stream ({model_name}) ---")
+                for line in response.iter_lines():
+                    if line:
+                        decoded_line = line.decode("utf-8")
+                        try:
+                            chunk = json.loads(decoded_line)
+                            if "error" in chunk:
+                                logging.error(
+                                    f"Ollama API error during stream for model '{model_name}': {chunk['error']}"
+                                )
+                                print(f"\n--- End Ollama Stream (Error) ---")
+                                return None  # Specific Ollama error, don't retry
 
-            if "error" in response_data:
-                logging.error(f"Ollama API error for model '{model_name}': {response_data['error']}")
-                return None # Specific Ollama error, don't retry
+                            response_part = chunk.get("response", "")
+                            print(response_part, end="", flush=True)  # Stream to console
+                            full_response_text_parts.append(response_part)
 
-            if "response" in response_data:
-                response_text = response_data["response"]
-                logging.info(f"Ollama API call successful for model '{model_name}'.")
-                return response_text.strip()
-            else:
-                logging.warning(
-                    f"Ollama API response for model '{model_name}' did not contain 'response' key. Attempt {attempt + 1}/{max_retries}. Data: {response_data}"
-                )
+                            if chunk.get("done"):
+                                print(f"\n--- End Ollama Stream (Done) ---")
+                                logging.info(
+                                    f"Ollama API stream completed for model '{model_name}'."
+                                )
+                                final_text = "".join(full_response_text_parts).strip()
+                                return final_text
+                        except json.JSONDecodeError:
+                            logging.error(
+                                f"Error decoding JSON chunk from Ollama stream: {decoded_line}"
+                            )
+                            print(f"\n--- End Ollama Stream (JSON Error) ---")
+                            return None
+                # This part might be reached if the stream ends unexpectedly without a 'done: true'
+                print(f"\n--- End Ollama Stream (Unexpected End) ---")
+                logging.warning("Ollama stream ended without a 'done: true' message.")
+                return "".join(full_response_text_parts).strip() if full_response_text_parts else None
+            else:  # Not streaming
+                response_data = response.json()
+                if "error" in response_data:
+                    logging.error(f"Ollama API error for model '{model_name}': {response_data['error']}")
+                    return None
+                if "response" in response_data:
+                    response_text = response_data["response"]
+                    logging.info(f"Ollama API call successful for model '{model_name}'.")
+                    return response_text.strip()
+                else:
+                    logging.warning(
+                        f"Ollama API response for model '{model_name}' did not contain 'response' key. Attempt {attempt + 1}/{max_retries}. Data: {response_data}"
+                    )
 
         except requests.exceptions.HTTPError as e:
             logging.warning(f"Ollama API call (model '{model_name}') attempt {attempt + 1} failed with HTTPError: {e}. Status: {e.response.status_code}")
