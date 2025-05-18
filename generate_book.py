@@ -24,6 +24,7 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Mm, Pt
 from dotenv import load_dotenv
 from lxml import html
+import requests # Added for Ollama
 from PIL import Image
 from random_words import RandomWords
 
@@ -304,33 +305,35 @@ def save_to_cache(prompt_text, response_text, cache_dir, cache_prefix=None):
         logging.error(f"Error saving response to cache file {cache_file}: {e}")
 
 
-# --- Gemini API Interaction ---
-def call_gemini_api(prompt, config, cache_prefix=None):
+# --- LLM API Interaction ---
+def _call_gemini_api_internal(prompt, config, cache_prefix=None):
     """
-    Calls the Gemini API, using caching with an optional filename prefix.
+    Internal function to call the Gemini API.
+    Assumes caching is handled by the caller.
 
     Args:
         prompt (str): The prompt to send to the API.
         config (dict): The application configuration.
         cache_prefix (str, optional): A prefix to add to the cache filename
                                       for better identification. Defaults to None.
-
+                                      (Note: cache_prefix is for logging/context here, actual caching is external)
     Returns:
         str or None: The API response text, or None if an error occurred.
     """
-    # Use the topic-specific cache directory determined in main()
-    # This assumes config['cache_dir'] has been updated before this call
-    cache_dir = config.get("cache_dir", "api_cache")
+    api_settings_conf = config.get("api_settings", {})
+    gemini_conf = api_settings_conf.get("gemini", {})
 
-    cached_response = load_from_cache(prompt, cache_dir, cache_prefix)
-    if cached_response is not None:
-        return cached_response
+    default_max_retries = api_settings_conf.get("default_max_retries", 3)
+    default_retry_delay = api_settings_conf.get("default_retry_delay_seconds", 5)
 
-    logging.info(f"Calling Gemini API... (Cache Prefix: {cache_prefix or 'None'})")
-    model_name = config.get("gemini_model", "gemini-1.5-flash-latest")
-    temperature = config.get("gemini_temperature", 0.7)
-    max_retries = config.get("max_api_retries", 3)
-    retry_delay = config.get("retry_delay_seconds", 5)
+    # Logging for Gemini-specific call initiation (cache prefix is for context)
+    model_name = gemini_conf.get("model", "gemini-2.0-flash-latest")
+    temperature = float(gemini_conf.get("temperature", 1.0)) # Default from example config.yaml
+
+    max_retries = int(gemini_conf.get("max_retries", default_max_retries))
+    retry_delay = int(gemini_conf.get("retry_delay_seconds", default_retry_delay))
+    # safety_settings would be fetched from gemini_conf if specified in config.yaml under api_settings.gemini
+    safety_settings = gemini_conf.get("safety_settings", None)
 
     try:
         model = genai.GenerativeModel(model_name)
@@ -338,7 +341,6 @@ def call_gemini_api(prompt, config, cache_prefix=None):
 
         for attempt in range(max_retries):
             try:
-                safety_settings = config.get("gemini_safety_settings", None)
                 response = model.generate_content(
                     prompt,
                     generation_config=generation_config,
@@ -373,8 +375,8 @@ def call_gemini_api(prompt, config, cache_prefix=None):
                     # response_text remains None
 
                 if response_text is not None:  # Check if we got valid text
-                    logging.info("Gemini API call successful.")
-                    save_to_cache(prompt, response_text, cache_dir, cache_prefix)
+                    # Logging success specific to Gemini
+                    logging.info(f"Gemini API call successful for model {model_name}.")
                     return response_text
                 else:
                     logging.warning(
@@ -382,19 +384,125 @@ def call_gemini_api(prompt, config, cache_prefix=None):
                     )
 
             except Exception as e:
-                logging.warning(f"API call attempt {attempt + 1} failed: {e}")
+                logging.warning(f"Gemini API call attempt {attempt + 1} for model {model_name} failed: {e}")
 
             if attempt < max_retries - 1:
-                logging.info(f"Retrying in {retry_delay} seconds...")
+                logging.info(f"Retrying Gemini API call in {retry_delay} seconds...")
                 time.sleep(retry_delay)
 
-        logging.error(f"API call failed after {max_retries} attempts.")
+        logging.error(f"Gemini API call for model {model_name} failed after {max_retries} attempts.")
         return None  # Explicitly return None after all retries fail
 
     except Exception as e:
-        logging.error(f"An unexpected error occurred during API call setup: {e}")
+        logging.error(f"An unexpected error occurred during Gemini API call setup: {e}")
         return None
 
+def _call_ollama_api_internal(prompt, config, cache_prefix=None):
+    """
+    Internal function to call the Ollama API.
+    Assumes caching is handled by the caller.
+
+    Args:
+        prompt (str): The prompt to send to the API.
+        config (dict): The application configuration.
+        cache_prefix (str, optional): Contextual prefix, caching is external.
+
+    Returns:
+        str or None: The API response text, or None if an error occurred.
+    """
+    api_settings_conf = config.get("api_settings", {})
+    ollama_config = api_settings_conf.get("ollama", {})
+
+    default_max_retries = api_settings_conf.get("default_max_retries", 3)
+    default_retry_delay = api_settings_conf.get("default_retry_delay_seconds", 5)
+
+    base_url = ollama_config.get("base_url", "http://localhost:11434")
+    model_name = ollama_config.get("model", "llama3") # Default Ollama model
+    temperature = float(ollama_config.get("temperature", 0.7))
+
+    max_retries = int(ollama_config.get("max_retries", default_max_retries))
+    retry_delay = int(ollama_config.get("retry_delay_seconds", default_retry_delay))
+    request_timeout = int(ollama_config.get("request_timeout_seconds", 120)) # Default 2 mins
+    api_url = f"{base_url.rstrip('/')}/api/generate"
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False, # Keep it simple, no streaming for now
+        "options": {
+            "temperature": temperature
+        }
+    }
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                api_url,
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=request_timeout,
+            )
+            response.raise_for_status()  # Raises HTTPError for bad responses (4XX, 5XX)
+
+            response_data = response.json()
+
+            if "error" in response_data:
+                logging.error(f"Ollama API error for model '{model_name}': {response_data['error']}")
+                return None # Specific Ollama error, don't retry
+
+            if "response" in response_data:
+                response_text = response_data["response"]
+                logging.info(f"Ollama API call successful for model '{model_name}'.")
+                return response_text.strip()
+            else:
+                logging.warning(
+                    f"Ollama API response for model '{model_name}' did not contain 'response' key. Attempt {attempt + 1}/{max_retries}. Data: {response_data}"
+                )
+
+        except requests.exceptions.HTTPError as e:
+            logging.warning(f"Ollama API call (model '{model_name}') attempt {attempt + 1} failed with HTTPError: {e}. Status: {e.response.status_code}")
+            if e.response.status_code == 404: # Model not found
+                try:
+                    error_detail = e.response.json().get("error", "Model not found")
+                    logging.error(f"Ollama model '{model_name}' not found: {error_detail}. Please ensure the model is pulled and available.")
+                except json.JSONDecodeError:
+                    logging.error(f"Ollama model '{model_name}' not found (404).")
+                return None # Don't retry if model not found
+        except requests.exceptions.RequestException as e: # Covers ConnectionError, Timeout, etc.
+            logging.warning(f"Ollama API call (model '{model_name}') attempt {attempt + 1} failed: {e}")
+
+        if attempt < max_retries - 1:
+            logging.info(f"Retrying Ollama API call in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+        else:
+            logging.error(f"Ollama API call for model '{model_name}' failed after {max_retries} attempts.")
+            return None
+    return None # Should be covered by loop logic, but as a safeguard
+
+def call_llm_api(prompt, config, cache_prefix=None):
+    """
+    Calls the configured LLM API (Gemini or Ollama), using caching.
+    """
+    cache_dir = config.get("cache_dir", "api_cache") # This is now topic and model specific
+    cached_response = load_from_cache(prompt, cache_dir, cache_prefix)
+    if cached_response is not None:
+        return cached_response
+
+    api_settings = config.get("api_settings", {})
+    api_provider = api_settings.get("provider", "gemini") # Default to gemini
+    logging.info(f"Calling {api_provider.upper()} API... (Cache Prefix: {cache_prefix or 'None'})")
+
+    response_text = None
+    if api_provider == "gemini":
+        response_text = _call_gemini_api_internal(prompt, config, cache_prefix)
+    elif api_provider == "ollama":
+        response_text = _call_ollama_api_internal(prompt, config, cache_prefix)
+    else:
+        logging.error(f"Unsupported API provider: {api_provider}")
+        return None
+
+    if response_text is not None:
+        save_to_cache(prompt, response_text, cache_dir, cache_prefix)
+    return response_text
 
 # --- Book Generation Functions ---
 def generate_random_gender(config):
@@ -430,7 +538,7 @@ Output *only* one of the following words:
 Do not add any introductory text, explanations, or quotation marks. Just the single word.
 """
 
-    gender_text = call_gemini_api(
+    gender_text = call_llm_api(
         prompt,
         config,
         cache_prefix=f"determine_gender_{sanitize_filename(author_name, 30)}",
@@ -466,7 +574,7 @@ include: {', '.join(config['generation_params']['key_concepts'])}.
 Consider a name that might appear on a book. Output *only* the full name.
 Do not add introductory text, explanations, or quotation marks."""
 
-    name_text = call_gemini_api(prompt, config, cache_prefix="random_name")
+    name_text = call_llm_api(prompt, config, cache_prefix="random_name")
 
     if name_text:
         cleaned_name = name_text.strip().strip("\"'").strip()
@@ -520,7 +628,7 @@ Do not add introductory text, explanations, or quotation marks.
 Output in British English."""
 
     logging.info(f"Generating random topic using seed: '{random_seed}'...")
-    topic_text = call_gemini_api(prompt, config, cache_prefix="random_topic")
+    topic_text = call_llm_api(prompt, config, cache_prefix="random_topic")
 
     if topic_text:
         cleaned_topic = topic_text.strip().strip("\"'").rstrip(".").strip()
@@ -551,7 +659,7 @@ short description of the setting where this topic could be explored.
 Output only the setting description text. Do not add introductory text.
 Output in British English."""
 
-    setting_text = call_gemini_api(prompt, config, cache_prefix="setting")
+    setting_text = call_llm_api(prompt, config, cache_prefix="setting")
 
     if setting_text:
         cleaned_setting = setting_text.strip().strip("\"'")
@@ -595,8 +703,7 @@ text. Output in British English."""
 describing the most suitable writing tone for a book exploring this
 topic. Output *only* the phrase describing the tone. Do not add introductory
 text. Output in British English."""
-
-    tone_text = call_gemini_api(prompt, config, cache_prefix="writing_tone")
+    tone_text = call_llm_api(prompt, config, cache_prefix="writing_tone")
 
     if tone_text:
         cleaned_tone = tone_text.strip().strip("\"'").rstrip(".")
@@ -631,7 +738,7 @@ def generate_key_concepts(config):
     prompt = f"""Based on the main topic '{main_topic}' in a setting described as:
 "{setting}"
 
-Generate a list of distinct and relevant key concepts or
+Generate a extremely short list of distinct and relevant key concepts or
 terms that would be central to exploring this topic within the setting.
 
 Format the output as a simple comma-separated list. Example:
@@ -640,7 +747,7 @@ Concept One, Concept Two, Another Key Term, Fourth Idea, Final Concept
 Provide *only* the comma-separated list of concepts. Do not add introductory text.
 Output in British English."""
 
-    concepts_text = call_gemini_api(prompt, config, cache_prefix="key_concepts")
+    concepts_text = call_llm_api(prompt, config, cache_prefix="key_concepts")
 
     if concepts_text:
         cleaned_text = concepts_text.strip().strip("\"'")
@@ -664,7 +771,7 @@ Do not generate a two-part title. The generated title must not contain a subtitl
 Provide only the title text. Do not add introductory text. The title must not
 contain these punctuations: '-' or ':'. Output one title only. Output in
 British English."""
-    title = call_gemini_api(prompt, config, cache_prefix="book_title")
+    title = call_llm_api(prompt, config, cache_prefix="book_title")
     if title is None:
         logging.error("Fatal: Failed to generate book title after retries. Exiting.")
         sys.exit(1)
@@ -691,7 +798,7 @@ The subtitle must not contain these punctuations: '-' or ':'.
 Provide only the subtitle text. Output one subtitle only.
 Do not add introductory text. Output in British English."""
 
-    subtitle = call_gemini_api(prompt, config, cache_prefix="book_subtitle")
+    subtitle = call_llm_api(prompt, config, cache_prefix="book_subtitle")
     if subtitle:
         cleaned_subtitle = subtitle.strip().strip("\"'")
         if cleaned_subtitle:
@@ -766,7 +873,7 @@ Answer with only 'yes' or 'no'. Do not add any explanations, quotation marks, or
     safe_title_prefix = sanitize_filename(book_title, 30)
     cache_prefix = f"is_non_fiction_{safe_title_prefix}"
 
-    response_text = call_gemini_api(prompt, config, cache_prefix=cache_prefix)
+    response_text = call_llm_api(prompt, config, cache_prefix=cache_prefix)
 
     determined_is_non_fiction = False  # Default to fiction/indeterminate if API fails or gives unexpected response
     if response_text:
@@ -885,7 +992,7 @@ Provide *only* the Markdown list of characters. Do not add introductory text lik
 Output in British English.
 """
 
-    character_list_text = call_gemini_api(prompt, config, cache_prefix="character_list")
+    character_list_text = call_llm_api(prompt, config, cache_prefix="character_list")
 
     if character_list_text:
         cleaned_text = character_list_text.strip()
@@ -988,7 +1095,7 @@ Do not generate two-part titles. The generated titles must not contain subtitles
 The chapter titles must not contain these punctuations: '-' or ':'.
 Do not add introductory text.
 Output in British English."""
-    outline_text = call_gemini_api(prompt, config, cache_prefix="chapter_outline")
+    outline_text = call_llm_api(prompt, config, cache_prefix="chapter_outline")
     if outline_text:
         chapter_titles = []
         # Improved parsing to handle potential variations
@@ -1066,8 +1173,8 @@ Output in British English."""
     )  # Log the full prompt for debugging if needed
     # --- End prompt building ---
 
-    prefix = f"summary_{sanitize_filename(chapter_title, max_length=40)}"
-    summary = call_gemini_api(prompt, config, cache_prefix=prefix)
+    summary_cache_prefix = f"summary_{sanitize_filename(chapter_title, max_length=40)}"
+    summary = call_llm_api(prompt, config, cache_prefix=summary_cache_prefix)
 
     if summary:
         cleaned_summary = summary.strip()
@@ -1161,8 +1268,8 @@ not contain subtitles.
 - Output in British English.
 """
 
-    prefix = f"section_titles_{sanitize_filename(chapter_title, max_length=40)}"
-    titles_text = call_gemini_api(prompt, config, cache_prefix=prefix)
+    section_titles_cache_prefix = f"section_titles_{sanitize_filename(chapter_title, max_length=40)}"
+    titles_text = call_llm_api(prompt, config, cache_prefix=section_titles_cache_prefix)
     num_chapter_fallback = config["generation_params"]["num_chapter_fallback"]
     if titles_text:
         section_titles = []
@@ -1258,7 +1365,7 @@ syntax: use $...$ for inline math and $$...$$ for display math.
     # --- End cache prefix creation ---
 
     # --- Call API with the prefix ---
-    content = call_gemini_api(prompt, config, cache_prefix=cache_prefix_str)
+    content = call_llm_api(prompt, config, cache_prefix=cache_prefix_str)
     # --- End API call ---
 
     return (
@@ -1275,7 +1382,7 @@ def generate_front_matter(
     logging.info("Generating front matter...")
     front_matter = {}
 
-    # Subtitle generation already calls call_gemini_api with its own prefix
+    # Subtitle generation already calls call_llm_api with its own prefix
     book_subtitle = generate_book_subtitle(config, book_title, summary_context)
 
     front_matter["title_page"] = {
@@ -1343,7 +1450,7 @@ Output in British English.
         logging.info(f"Generating {element}...")
         # Use the element name (lowercase) as the prefix
         cache_prefix_str = element.lower()
-        content = call_gemini_api(prompt, config, cache_prefix=cache_prefix_str)
+        content = call_llm_api(prompt, config, cache_prefix=cache_prefix_str)
 
         processed_content = f"[{element} content generation failed.]"
         if content:
@@ -1416,7 +1523,7 @@ Output in British English."""
         key = element.lower().replace(" ", "_")
         # Use the key as the prefix
         cache_prefix_str = key
-        content = call_gemini_api(prompt, config, cache_prefix=cache_prefix_str)
+        content = call_llm_api(prompt, config, cache_prefix=cache_prefix_str)
         back_matter[key] = (
             content.strip() if content else f"[{element} content generation failed.]"
         )
@@ -1442,7 +1549,7 @@ Maintain a tone that is {writing_tone}, but adapted for marketing purposes (e.g.
 Output only the blurb text. Do not add introductory text.
 Output in British English."""
 
-    blurb = call_gemini_api(prompt, config, cache_prefix="book_blurb")
+    blurb = call_llm_api(prompt, config, cache_prefix="book_blurb")
 
     if blurb:
         cleaned_blurb = blurb.strip()
@@ -1480,7 +1587,7 @@ Chapter Summaries:
 Output *only* the overall summary text. Do not add introductory text.
 Output in British English."""
 
-    overall_summary = call_gemini_api(
+    overall_summary = call_llm_api(
         prompt, config, cache_prefix="overall_book_summary"
     )
 
@@ -3328,8 +3435,30 @@ if __name__ == "__main__":
     logging.info("Starting book generation process...")
     start_time = time.time()
     config = load_config()
-    api_key = setup_environment()
-    configure_gemini(api_key)
+    
+    api_settings = config.get("api_settings", {}) # Get api_settings once
+
+    # Determine API provider
+    api_provider = api_settings.get("provider", "gemini")
+    if api_provider == "gemini":
+        api_key = setup_environment() # This function exits if key not found
+        configure_gemini(api_key)     # This function exits on error
+        logging.info("Gemini API provider configured.")
+    elif api_provider == "ollama":
+        ollama_settings = config.get("ollama_settings", {})
+        ollama_base_url = ollama_settings.get("base_url", "http://localhost:11434")
+        try:
+            logging.info(f"Ollama API provider selected. Attempting to connect to: {ollama_base_url}")
+            # Quick health check for Ollama server
+            requests.get(f"{ollama_base_url.rstrip('/')}/api/tags", timeout=5).raise_for_status() # List models as a basic check
+            logging.info(f"Successfully connected to Ollama server at {ollama_base_url}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error: Could not connect or communicate with Ollama server at {ollama_base_url}. Error: {e}. Please ensure Ollama is running and accessible.")
+            sys.exit(1)
+    else:
+        logging.error(f"Unsupported API provider '{api_provider}' specified in config. Supported: 'gemini', 'ollama'. Exiting.")
+        sys.exit(1)
+
 
     # --- Determine Output Directory ---
     # Default to a subdirectory named 'output' in the current working directory
@@ -3349,9 +3478,9 @@ if __name__ == "__main__":
     # --- End Output Directory Setup ---
 
     # --- Determine Base Cache Directory ---
-    base_cache_dir = config.get("cache_dir", "api_cache")
-    pathlib.Path(base_cache_dir).mkdir(parents=True, exist_ok=True)
-    logging.info(f"Using base cache directory: {base_cache_dir}")
+    base_cache_dir_from_config = api_settings.get("base_cache_dir", "api_cache")
+    pathlib.Path(base_cache_dir_from_config).mkdir(parents=True, exist_ok=True)
+    logging.info(f"Using base cache directory: {base_cache_dir_from_config}")
 
     # --- Determine Main Topic ---
     generation_params = config.setdefault("generation_params", {})  # Ensure exists
@@ -3385,18 +3514,25 @@ if __name__ == "__main__":
     topic_hash = hashlib.sha1(main_topic.encode("utf-8")).hexdigest()[:8]
     topic_dir_name = f"{sanitized_topic}_{topic_hash}"
 
-    # --- Get and sanitize the model name ---
-    model_name = config.get("gemini_model", "unknown_model")
+    # --- Get and sanitize the model name for cache path ---
+    if api_provider == "gemini":
+        gemini_conf = api_settings.get("gemini", {})
+        model_name_for_cache = gemini_conf.get("model", "gemini-2.0-flash-latest")
+    elif api_provider == "ollama":
+        ollama_conf = api_settings.get("ollama", {})
+        model_name_for_cache = ollama_conf.get("model", "ollama_default_model")
+    else: # Should not happen due to earlier check
+        model_name_for_cache = "unknown_api_provider_model"
     # Sanitize the model name to make it directory-safe, limit length
-    sanitized_model_name = sanitize_filename(model_name, 30)
+    sanitized_model_name = sanitize_filename(model_name_for_cache, 30)
     logging.info(f"Using model name for cache path: '{sanitized_model_name}'")
 
     # --- Create the cache path including the model name ---
     topic_specific_cache_dir = (
-        pathlib.Path(base_cache_dir) / sanitized_model_name / topic_dir_name
+        pathlib.Path(base_cache_dir_from_config) / sanitized_model_name / topic_dir_name
     )  # Use pathlib
     logging.info(f"Topic-specific cache directory set to: {topic_specific_cache_dir}")
-    # Update the config dictionary IN MEMORY so subsequent calls use the right path
+    # Update the config dictionary IN MEMORY so subsequent calls to call_llm_api use the right path
     config["cache_dir"] = str(
         topic_specific_cache_dir
     )  # Store as string if needed elsewhere
