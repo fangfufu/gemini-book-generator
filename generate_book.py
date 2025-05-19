@@ -1488,8 +1488,6 @@ def generate_section_content(
     total_sections,
     chapter_summary,
     writing_tone,
-    all_chapter_titles,  # New parameter
-    all_chapter_summaries,  # New parameter
     character_context="",
 ):
     """Generates content for a single section using Markdown, asking AI to use
@@ -1498,16 +1496,6 @@ def generate_section_content(
         f"Generating content for: Chapter '{chapter_title}' -> Section {section_num}/{total_sections}: '{section_title}' (using summary)"
     )
 
-    # --- Prepare Context from Other Chapters ---
-    other_chapters_context_parts = []
-    for idx, title in enumerate(all_chapter_titles):
-        if title != chapter_title:  # Exclude current chapter
-            summary = all_chapter_summaries.get(title, "[Summary not available]")
-            other_chapters_context_parts.append(f"- Chapter '{title}': {summary}")
-    other_chapters_context = "\n".join(other_chapters_context_parts)
-    if not other_chapters_context:
-        other_chapters_context = "[No other chapter summaries available for context]"
-    # --- End Context Preparation ---
 
     # --- Refactored Prompt ---
     prompt = f"""
@@ -1516,8 +1504,6 @@ Context:
 - Setting: {config['generation_params']['setting']}
 - Key Concepts: {', '.join(config['generation_params']['key_concepts'])}
 {"-" if character_context else ""}{character_context}
-- Summaries of OTHER chapters (for context on what's covered elsewhere):
-{other_chapters_context}
 
 ---
 Current Task Context:
@@ -1530,9 +1516,7 @@ Current Task Context:
 Task:
 Write a detailed section for the book described above, focusing specifically on 
 the topic defined by the section title ('{section_title}'). Ensure the content 
-fits logically within the context provided by the current chapter summary AND is 
-distinct from the content suggested by the summaries of OTHER chapters provided 
-above. Avoid significant overlap.
+fits logically within the context provided by the current chapter summary.
 
 Instructions:
 - Write approximately 2000 words for this section.
@@ -4141,8 +4125,6 @@ if __name__ == "__main__":
                 1,  # total_sections
                 chapter_summary,
                 writing_tone,
-                chapter_titles, # Pass all chapter titles
-                chapter_summaries, # Pass all chapter summaries
                 character_context_for_prompts,
             )
             body_matter[chap_title].append(
@@ -4195,8 +4177,6 @@ if __name__ == "__main__":
                     len(section_titles),
                     chapter_summary,
                     writing_tone,
-                    chapter_titles,  # Pass all chapter titles
-                    chapter_summaries,  # Pass all chapter summaries
                     character_context_for_prompts,
                 )
                 body_matter[chap_title].append(
