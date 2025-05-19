@@ -24,8 +24,8 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Mm, Pt
 from dotenv import load_dotenv
 from lxml import html
-import requests # Added for Ollama
-from transformers import AutoTokenizer # Added for Ollama client-side tokenization
+import requests  # Added for Ollama
+from transformers import AutoTokenizer  # Added for Ollama client-side tokenization
 from PIL import Image
 from random_words import RandomWords
 
@@ -329,7 +329,9 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
 
     # Logging for Gemini-specific call initiation (cache prefix is for context)
     model_name = gemini_conf.get("model", "gemini-2.0-flash-latest")
-    temperature = float(gemini_conf.get("temperature", 1.0)) # Default from example config.yaml
+    temperature = float(
+        gemini_conf.get("temperature", 1.0)
+    )  # Default from example config.yaml
 
     max_retries = int(gemini_conf.get("max_retries", default_max_retries))
     retry_delay = int(gemini_conf.get("retry_delay_seconds", default_retry_delay))
@@ -337,7 +339,9 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
     safety_settings = gemini_conf.get("safety_settings", None)
 
     verbose_debug = config.get("debug_options", {}).get("verbose_debug", False)
-    stream_gemini = verbose_debug # Specifically for Gemini streaming if verbose_debug is on
+    stream_gemini = (
+        verbose_debug  # Specifically for Gemini streaming if verbose_debug is on
+    )
 
     try:
         if verbose_debug:
@@ -352,9 +356,13 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
         try:
             token_count_response = model.count_tokens(prompt)
             prompt_token_count = token_count_response.total_tokens
-            logging.info(f"Gemini prompt token count for model '{model_name}': {prompt_token_count} tokens.")
+            logging.info(
+                f"Gemini prompt token count for model '{model_name}': {prompt_token_count} tokens."
+            )
         except Exception as e_token:
-            logging.warning(f"Could not count tokens for Gemini prompt (model '{model_name}'): {e_token}")
+            logging.warning(
+                f"Could not count tokens for Gemini prompt (model '{model_name}'): {e_token}"
+            )
 
         for attempt in range(max_retries):
             try:
@@ -372,26 +380,35 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                     for chunk in response:
                         if chunk.parts:
                             response_part = chunk.text
-                            print(response_part, end="", flush=True) # Stream to console
+                            print(
+                                response_part, end="", flush=True
+                            )  # Stream to console
                             full_response_text_parts.append(response_part)
-                        elif chunk.prompt_feedback and chunk.prompt_feedback.block_reason:
+                        elif (
+                            chunk.prompt_feedback and chunk.prompt_feedback.block_reason
+                        ):
                             logging.warning(
                                 f"Gemini API stream blocked. Reason: {chunk.prompt_feedback.block_reason}"
                             )
                             print(f"\n--- End Gemini Stream (Blocked) ---")
-                            return None # Blocked, don't retry
+                            return None  # Blocked, don't retry
                         # We don't typically get 'done' in the same way as Ollama,
                         # the stream just ends. The loop finishing means it's done.
 
                     print(f"\n--- End Gemini Stream (Done) ---")
-                    logging.info(f"Gemini API stream completed for model '{model_name}'.")
+                    logging.info(
+                        f"Gemini API stream completed for model '{model_name}'."
+                    )
                     final_text = "".join(full_response_text_parts).strip()
                     return final_text
-                else: # Not streaming
+                else:  # Not streaming
                     response_text = None  # Initialize
                     if response.parts:
                         response_text = response.text
-                    elif response.prompt_feedback and response.prompt_feedback.block_reason:
+                    elif (
+                        response.prompt_feedback
+                        and response.prompt_feedback.block_reason
+                    ):
                         logging.warning(
                             f"API call blocked. Reason: {response.prompt_feedback.block_reason}"
                         )
@@ -417,7 +434,9 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
 
                     if response_text is not None:  # Check if we got valid text
                         # Logging success specific to Gemini
-                        logging.info(f"Gemini API call successful for model {model_name}.")
+                        logging.info(
+                            f"Gemini API call successful for model {model_name}."
+                        )
                         return response_text
                     else:
                         logging.warning(
@@ -425,22 +444,27 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                         )
 
             except Exception as e:
-                logging.warning(f"Gemini API call attempt {attempt + 1} for model {model_name} failed: {e}")
+                logging.warning(
+                    f"Gemini API call attempt {attempt + 1} for model {model_name} failed: {e}"
+                )
                 # Specific error handling for Gemini if needed, e.g., quota errors
-                if "quota" in str(e).lower(): # Basic check for quota issues
+                if "quota" in str(e).lower():  # Basic check for quota issues
                     logging.error(f"Gemini API quota likely exceeded: {e}")
-                    return None # Don't retry quota issues immediately
+                    return None  # Don't retry quota issues immediately
 
             if attempt < max_retries - 1:
                 logging.info(f"Retrying Gemini API call in {retry_delay} seconds...")
                 time.sleep(retry_delay)
 
-        logging.error(f"Gemini API call for model {model_name} failed after {max_retries} attempts.")
+        logging.error(
+            f"Gemini API call for model {model_name} failed after {max_retries} attempts."
+        )
         return None  # Explicitly return None after all retries fail
 
     except Exception as e:
         logging.error(f"An unexpected error occurred during Gemini API call setup: {e}")
         return None
+
 
 def _call_ollama_api_internal(prompt, config, cache_prefix=None):
     """
@@ -462,17 +486,23 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
     default_retry_delay = api_settings_conf.get("default_retry_delay_seconds", 5)
 
     base_url = ollama_config.get("base_url", "http://localhost:11434")
-    model_name = ollama_config.get("model", "llama3") # Default Ollama model
+    model_name = ollama_config.get("model", "llama3")  # Default Ollama model
     temperature = float(ollama_config.get("temperature", 0.7))
-    tokenizer_model_name = ollama_config.get("tokenizer_model", "NousResearch/Llama-3-8B-Instruct-hf") # Default Llama3 tokenizer
+    tokenizer_model_name = ollama_config.get(
+        "tokenizer_model", "NousResearch/Llama-3-8B-Instruct-hf"
+    )  # Default Llama3 tokenizer
 
     max_retries = int(ollama_config.get("max_retries", default_max_retries))
     retry_delay = int(ollama_config.get("retry_delay_seconds", default_retry_delay))
-    request_timeout = int(ollama_config.get("request_timeout_seconds", 120)) # Default 2 mins
+    request_timeout = int(
+        ollama_config.get("request_timeout_seconds", 120)
+    )  # Default 2 mins
     api_url = f"{base_url.rstrip('/')}/api/generate"
 
     verbose_debug = config.get("debug_options", {}).get("verbose_debug", False)
-    stream_ollama = verbose_debug # Specifically for Ollama streaming if verbose_debug is on
+    stream_ollama = (
+        verbose_debug  # Specifically for Ollama streaming if verbose_debug is on
+    )
 
     payload = {
         "model": model_name,
@@ -490,16 +520,26 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
     # Note: For higher efficiency with many calls, consider loading the tokenizer once outside this function.
     if tokenizer_model_name:
         try:
-            logging.debug(f"Loading tokenizer: {tokenizer_model_name} for Ollama prompt token count.")
+            logging.debug(
+                f"Loading tokenizer: {tokenizer_model_name} for Ollama prompt token count."
+            )
             tokenizer = AutoTokenizer.from_pretrained(tokenizer_model_name)
             token_ids = tokenizer.encode(prompt)
             num_tokens = len(token_ids)
-            logging.info(f"Ollama client-side token count for prompt (tokenizer: '{tokenizer_model_name}', model: '{model_name}'): {num_tokens} tokens.")
+            logging.info(
+                f"Ollama client-side token count for prompt (tokenizer: '{tokenizer_model_name}', model: '{model_name}'): {num_tokens} tokens."
+            )
         except Exception as e_token_ollama:
-            logging.warning(f"Could not count tokens for Ollama prompt using tokenizer '{tokenizer_model_name}' (model: '{model_name}'): {e_token_ollama}")
-            logging.info(f"Ollama API for model '{model_name}': Standard Ollama API does not provide a direct prompt token count. Client-side estimation failed.")
+            logging.warning(
+                f"Could not count tokens for Ollama prompt using tokenizer '{tokenizer_model_name}' (model: '{model_name}'): {e_token_ollama}"
+            )
+            logging.info(
+                f"Ollama API for model '{model_name}': Standard Ollama API does not provide a direct prompt token count. Client-side estimation failed."
+            )
     else:
-        logging.info(f"Ollama API for model '{model_name}': No tokenizer_model configured for client-side token counting. Standard Ollama API does not provide a direct prompt token count.")
+        logging.info(
+            f"Ollama API for model '{model_name}': No tokenizer_model configured for client-side token counting. Standard Ollama API does not provide a direct prompt token count."
+        )
 
     for attempt in range(max_retries):
         try:
@@ -529,7 +569,9 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                                 return None  # Specific Ollama error, don't retry
 
                             response_part = chunk.get("response", "")
-                            print(response_part, end="", flush=True)  # Stream to console
+                            print(
+                                response_part, end="", flush=True
+                            )  # Stream to console
                             full_response_text_parts.append(response_part)
 
                             if chunk.get("done"):
@@ -548,15 +590,23 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                 # This part might be reached if the stream ends unexpectedly without a 'done: true'
                 print(f"\n--- End Ollama Stream (Unexpected End) ---")
                 logging.warning("Ollama stream ended without a 'done: true' message.")
-                return "".join(full_response_text_parts).strip() if full_response_text_parts else None
+                return (
+                    "".join(full_response_text_parts).strip()
+                    if full_response_text_parts
+                    else None
+                )
             else:  # Not streaming
                 response_data = response.json()
                 if "error" in response_data:
-                    logging.error(f"Ollama API error for model '{model_name}': {response_data['error']}")
+                    logging.error(
+                        f"Ollama API error for model '{model_name}': {response_data['error']}"
+                    )
                     return None
                 if "response" in response_data:
                     response_text = response_data["response"]
-                    logging.info(f"Ollama API call successful for model '{model_name}'.")
+                    logging.info(
+                        f"Ollama API call successful for model '{model_name}'."
+                    )
                     return response_text.strip()
                 else:
                     logging.warning(
@@ -564,37 +614,52 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                     )
 
         except requests.exceptions.HTTPError as e:
-            logging.warning(f"Ollama API call (model '{model_name}') attempt {attempt + 1} failed with HTTPError: {e}. Status: {e.response.status_code}")
-            if e.response.status_code == 404: # Model not found
+            logging.warning(
+                f"Ollama API call (model '{model_name}') attempt {attempt + 1} failed with HTTPError: {e}. Status: {e.response.status_code}"
+            )
+            if e.response.status_code == 404:  # Model not found
                 try:
                     error_detail = e.response.json().get("error", "Model not found")
-                    logging.error(f"Ollama model '{model_name}' not found: {error_detail}. Please ensure the model is pulled and available.")
+                    logging.error(
+                        f"Ollama model '{model_name}' not found: {error_detail}. Please ensure the model is pulled and available."
+                    )
                 except json.JSONDecodeError:
                     logging.error(f"Ollama model '{model_name}' not found (404).")
-                return None # Don't retry if model not found
-        except requests.exceptions.RequestException as e: # Covers ConnectionError, Timeout, etc.
-            logging.warning(f"Ollama API call (model '{model_name}') attempt {attempt + 1} failed: {e}")
+                return None  # Don't retry if model not found
+        except (
+            requests.exceptions.RequestException
+        ) as e:  # Covers ConnectionError, Timeout, etc.
+            logging.warning(
+                f"Ollama API call (model '{model_name}') attempt {attempt + 1} failed: {e}"
+            )
 
         if attempt < max_retries - 1:
             logging.info(f"Retrying Ollama API call in {retry_delay} seconds...")
             time.sleep(retry_delay)
         else:
-            logging.error(f"Ollama API call for model '{model_name}' failed after {max_retries} attempts.")
+            logging.error(
+                f"Ollama API call for model '{model_name}' failed after {max_retries} attempts."
+            )
             return None
-    return None # Should be covered by loop logic, but as a safeguard
+    return None  # Should be covered by loop logic, but as a safeguard
+
 
 def call_llm_api(prompt, config, cache_prefix=None):
     """
     Calls the configured LLM API (Gemini or Ollama), using caching.
     """
-    cache_dir = config.get("cache_dir", "api_cache") # This is now topic and model specific
+    cache_dir = config.get(
+        "cache_dir", "api_cache"
+    )  # This is now topic and model specific
     cached_response = load_from_cache(prompt, cache_dir, cache_prefix)
     if cached_response is not None:
         return cached_response
 
     api_settings = config.get("api_settings", {})
-    api_provider = api_settings.get("provider", "gemini") # Default to gemini
-    logging.info(f"Calling {api_provider.upper()} API... (Cache Prefix: {cache_prefix or 'None'})")
+    api_provider = api_settings.get("provider", "gemini")  # Default to gemini
+    logging.info(
+        f"Calling {api_provider.upper()} API... (Cache Prefix: {cache_prefix or 'None'})"
+    )
 
     response_text = None
     if api_provider == "gemini":
@@ -608,6 +673,7 @@ def call_llm_api(prompt, config, cache_prefix=None):
     if response_text is not None:
         save_to_cache(prompt, response_text, cache_dir, cache_prefix)
     return response_text
+
 
 # --- Book Generation Functions ---
 def generate_random_gender(config):
@@ -1162,7 +1228,7 @@ def format_character_list_for_prompt(character_list):
     if not formatted_items:
         return ""
 
-    return "Character List:\n" + "\n".join(formatted_items) + "\n"
+    return "Potential characters:\n" + "\n".join(formatted_items) + "\n"
 
 
 def generate_chapter_outline(config, character_context=""):
@@ -1189,7 +1255,7 @@ book about '{config['generation_params']['main_topic']}'. The setting of the boo
 is described as: {config['generation_params']['setting']}.
 Key concepts include: {', '.join(config['generation_params']['key_concepts'])}.
 {character_context}
-The chapters should logically progress through the topic, potentially involving the key characters.
+The chapters should logically progress through the topic, potentially involving the characters.
 Ensure the list of chapter titles is appropriate for the type of book (fiction/non-fiction).
 Format the output as a numbered list, with each title on a new line.
 Start numbering from 1. Example:
@@ -1264,7 +1330,7 @@ avoiding unnecessary repetition of themes or information already covered."""
     # Prepare character-specific instruction
     character_consideration_text = ""
     if character_context:
-        character_consideration_text = "Consider how the key characters might be involved or relevant to this chapter's summary.\n"
+        character_consideration_text = "Consider how the characters might be involved or relevant to this chapter's summary.\n"
 
     # Add remaining instructions
     prompt_parts.extend(
@@ -1362,7 +1428,7 @@ chapter titled '{chapter_title}'.This chapter's specific summary is:
 Instructions:
 - The section titles should logically break down the chapter's topic as 
 described in *its specific summary*.
-- Consider how the key characters might relate to these sections.
+- Consider how the characters might relate to these sections.
 - Ensure the generated section titles are distinct and avoid significant 
 overlap with topics clearly covered in the *summaries of other chapters* 
 provided above or topics strongly implied by the *titles of other chapters*.
@@ -1376,7 +1442,9 @@ not contain subtitles.
 - Output in British English.
 """
 
-    section_titles_cache_prefix = f"section_titles_{sanitize_filename(chapter_title, max_length=40)}"
+    section_titles_cache_prefix = (
+        f"section_titles_{sanitize_filename(chapter_title, max_length=40)}"
+    )
     titles_text = call_llm_api(prompt, config, cache_prefix=section_titles_cache_prefix)
     num_chapter_fallback = config["generation_params"]["num_chapter_fallback"]
     if titles_text:
@@ -1420,8 +1488,8 @@ def generate_section_content(
     total_sections,
     chapter_summary,
     writing_tone,
-    all_chapter_titles, # New parameter
-    all_chapter_summaries, # New parameter
+    all_chapter_titles,  # New parameter
+    all_chapter_summaries,  # New parameter
     character_context="",
 ):
     """Generates content for a single section using Markdown, asking AI to use
@@ -1433,7 +1501,7 @@ def generate_section_content(
     # --- Prepare Context from Other Chapters ---
     other_chapters_context_parts = []
     for idx, title in enumerate(all_chapter_titles):
-        if title != chapter_title: # Exclude current chapter
+        if title != chapter_title:  # Exclude current chapter
             summary = all_chapter_summaries.get(title, "[Summary not available]")
             other_chapters_context_parts.append(f"- Chapter '{title}': {summary}")
     other_chapters_context = "\n".join(other_chapters_context_parts)
@@ -1715,9 +1783,7 @@ Chapter Summaries:
 Output *only* the overall summary text. Do not add introductory text.
 Output in British English."""
 
-    overall_summary = call_llm_api(
-        prompt, config, cache_prefix="overall_book_summary"
-    )
+    overall_summary = call_llm_api(prompt, config, cache_prefix="overall_book_summary")
 
     if overall_summary:
         cleaned_summary = overall_summary.strip()
@@ -3473,7 +3539,7 @@ def assemble_marketing_docx(
     # --- Add Character List (if generated) ---
     character_list = gen_params.get("character_list")
     if character_list:
-        doc.add_paragraph("Key Characters", style="Heading 2")
+        doc.add_paragraph("characters", style="Heading 2")
         list_style = (
             doc.styles["List Bullet"]
             if "List Bullet" in doc.styles
@@ -3563,30 +3629,39 @@ if __name__ == "__main__":
     logging.info("Starting book generation process...")
     start_time = time.time()
     config = load_config()
-    
-    api_settings = config.get("api_settings", {}) # Get api_settings once
+
+    api_settings = config.get("api_settings", {})  # Get api_settings once
 
     # Determine API provider
     api_provider = api_settings.get("provider", "gemini")
     if api_provider == "gemini":
-        api_key = setup_environment() # This function exits if key not found
-        configure_gemini(api_key)     # This function exits on error
+        api_key = setup_environment()  # This function exits if key not found
+        configure_gemini(api_key)  # This function exits on error
         logging.info("Gemini API provider configured.")
     elif api_provider == "ollama":
         ollama_settings = config.get("ollama_settings", {})
         ollama_base_url = ollama_settings.get("base_url", "http://localhost:11434")
         try:
-            logging.info(f"Ollama API provider selected. Attempting to connect to: {ollama_base_url}")
+            logging.info(
+                f"Ollama API provider selected. Attempting to connect to: {ollama_base_url}"
+            )
             # Quick health check for Ollama server
-            requests.get(f"{ollama_base_url.rstrip('/')}/api/tags", timeout=5).raise_for_status() # List models as a basic check
-            logging.info(f"Successfully connected to Ollama server at {ollama_base_url}")
+            requests.get(
+                f"{ollama_base_url.rstrip('/')}/api/tags", timeout=5
+            ).raise_for_status()  # List models as a basic check
+            logging.info(
+                f"Successfully connected to Ollama server at {ollama_base_url}"
+            )
         except requests.exceptions.RequestException as e:
-            logging.error(f"Error: Could not connect or communicate with Ollama server at {ollama_base_url}. Error: {e}. Please ensure Ollama is running and accessible.")
+            logging.error(
+                f"Error: Could not connect or communicate with Ollama server at {ollama_base_url}. Error: {e}. Please ensure Ollama is running and accessible."
+            )
             sys.exit(1)
     else:
-        logging.error(f"Unsupported API provider '{api_provider}' specified in config. Supported: 'gemini', 'ollama'. Exiting.")
+        logging.error(
+            f"Unsupported API provider '{api_provider}' specified in config. Supported: 'gemini', 'ollama'. Exiting."
+        )
         sys.exit(1)
-
 
     # --- Determine Output Directory ---
     # Default to a subdirectory named 'output' in the current working directory
@@ -3649,7 +3724,7 @@ if __name__ == "__main__":
     elif api_provider == "ollama":
         ollama_conf = api_settings.get("ollama", {})
         model_name_for_cache = ollama_conf.get("model", "ollama_default_model")
-    else: # Should not happen due to earlier check
+    else:  # Should not happen due to earlier check
         model_name_for_cache = "unknown_api_provider_model"
     # Sanitize the model name to make it directory-safe, limit length
     sanitized_model_name = sanitize_filename(model_name_for_cache, 30)
@@ -4118,8 +4193,8 @@ if __name__ == "__main__":
                     len(section_titles),
                     chapter_summary,
                     writing_tone,
-                chapter_titles, # Pass all chapter titles
-                chapter_summaries, # Pass all chapter summaries
+                    chapter_titles,  # Pass all chapter titles
+                    chapter_summaries,  # Pass all chapter summaries
                     character_context_for_prompts,
                 )
                 body_matter[chap_title].append(
