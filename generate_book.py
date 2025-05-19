@@ -1496,8 +1496,6 @@ def generate_section_content(
         f"Generating content for: Chapter '{chapter_title}' -> Section {section_num}/{total_sections}: '{section_title}' (using summary)"
     )
 
-
-    # --- Refactored Prompt ---
     prompt = f"""
 Context:
 - Book Main Topic: '{config['generation_params']['main_topic']}'
@@ -1534,8 +1532,6 @@ Markdown output.
 syntax: use $...$ for inline math and $$...$$ for display math.
 - Write the entire output in British English.
 """
-    # --- End Refactored Prompt ---
-
     # --- Create the cache prefix ---
     # Sanitize chapter and section titles and combine them, limit length
     safe_chapter_title = sanitize_filename(chapter_title, max_length=30)
@@ -3320,7 +3316,8 @@ def assemble_docx(
             section_title = section_info.get("title", f"Section {j+1}")
             logging.debug(f"Adding content for Section {j+1}: '{section_title}'")
             # Add section title (spacing handled by style)
-            doc.add_paragraph(section_title, style="Heading 2")
+            if section_title:
+                doc.add_paragraph(section_title, style="Heading 2")
 
             # --- Construct context label for body section ---
             safe_chap_title = sanitize_filename(chapter_title, 30)
@@ -4129,7 +4126,7 @@ if __name__ == "__main__":
             )
             body_matter[chap_title].append(
                 {
-                    "title": fiction_section_title,
+                    "title": "",
                     "content": chapter_content_as_single_block,
                 }
             )
