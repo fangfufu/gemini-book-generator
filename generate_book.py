@@ -1226,17 +1226,20 @@ this new summary is distinct and logically follows or contrasts with them,
 avoiding unnecessary repetition of themes or information already covered."""
         )
 
+    # Prepare character-specific instruction
+    character_consideration_text = ""
+    if character_context:
+        character_consideration_text = "Consider how the key characters might be involved or relevant to this chapter's summary.\n"
+
     # Add remaining instructions
     prompt_parts.extend(
         [
             f"""\nMaintain a tone that is {writing_tone}.
-{"Consider how the key characters might be involved or relevant to this chapter's summary." if character_context else ""},
-Output only the summary text for the current chapter ('{chapter_title}'). 
+{character_consideration_text}Output only the summary text for the current chapter ('{chapter_title}').
 Do not add introductory text like 'This chapter summary is:'.
 Output in British English."""
         ]
     )
-
     prompt = "\n".join(prompt_parts)
     logging.debug(
         f"Prompt for chapter summary '{chapter_title}':\n{prompt}"
@@ -1382,6 +1385,8 @@ def generate_section_content(
     total_sections,
     chapter_summary,
     writing_tone,
+    all_chapter_titles, # New parameter
+    all_chapter_summaries, # New parameter
     character_context="",
 ):
     """Generates content for a single section using Markdown, asking AI to use
@@ -1390,6 +1395,17 @@ def generate_section_content(
         f"Generating content for: Chapter '{chapter_title}' -> Section {section_num}/{total_sections}: '{section_title}' (using summary)"
     )
 
+    # --- Prepare Context from Other Chapters ---
+    other_chapters_context_parts = []
+    for idx, title in enumerate(all_chapter_titles):
+        if title != chapter_title: # Exclude current chapter
+            summary = all_chapter_summaries.get(title, "[Summary not available]")
+            other_chapters_context_parts.append(f"- Chapter '{title}': {summary}")
+    other_chapters_context = "\n".join(other_chapters_context_parts)
+    if not other_chapters_context:
+        other_chapters_context = "[No other chapter summaries available for context]"
+    # --- End Context Preparation ---
+
     # --- Refactored Prompt ---
     prompt = f"""
 Context:
@@ -1397,6 +1413,11 @@ Context:
 - Setting: {config['generation_params']['setting']}
 - Key Concepts: {', '.join(config['generation_params']['key_concepts'])}
 {"-" if character_context else ""}{character_context}
+- Summaries of OTHER chapters (for context on what's covered elsewhere):
+{other_chapters_context}
+
+---
+Current Task Context:
 - Current Chapter Title: '{chapter_title}'
 - Current Chapter Summary: "{chapter_summary}"
 - Current Section Title: '{section_title}'
@@ -1406,7 +1427,9 @@ Context:
 Task:
 Write a detailed section for the book described above, focusing specifically on 
 the topic defined by the section title ('{section_title}'). Ensure the content 
-fits logically within the context provided by the chapter summary.
+fits logically within the context provided by the current chapter summary AND is 
+distinct from the content suggested by the summaries of OTHER chapters provided 
+above. Avoid significant overlap.
 
 Instructions:
 - Write approximately 2000 words for this section.
@@ -4060,6 +4083,8 @@ if __name__ == "__main__":
                     len(section_titles),
                     chapter_summary,
                     writing_tone,
+                chapter_titles, # Pass all chapter titles
+                chapter_summaries, # Pass all chapter summaries
                     character_context_for_prompts,
                 )
                 body_matter[chap_title].append(
