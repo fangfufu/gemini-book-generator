@@ -1162,7 +1162,7 @@ def format_character_list_for_prompt(character_list):
     if not formatted_items:
         return ""
 
-    return "Key Characters:\n" + "\n".join(formatted_items) + "\n"
+    return "Character List:\n" + "\n".join(formatted_items) + "\n"
 
 
 def generate_chapter_outline(config, character_context=""):
