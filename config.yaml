@@ -81,7 +81,8 @@ api_settings:
   ollama:
     base_url: "http://localhost:11434" # Your Ollama server address
     model: "gemma3:12b"                    # The Ollama model you want to use
-    temperature: 0.0
+    tokenizer_model: "google/gemma-3-1b-it" # Tokenizer for client-side counting
+    temperature: 0.7
     # To use Ollama-specific retries different from default:
     # max_retries: 3
     # retry_delay_seconds: 5

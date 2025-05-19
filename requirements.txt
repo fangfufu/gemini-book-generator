@@ -8,4 +8,6 @@ lxml
 Pillow
 RandomWords
 pymdown-extensions
-request
+transformers
+tokenizers
+sentencepiece

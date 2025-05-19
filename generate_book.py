@@ -25,6 +25,7 @@ from docx.shared import Inches, Mm, Pt
 from dotenv import load_dotenv
 from lxml import html
 import requests # Added for Ollama
+from transformers import AutoTokenizer # Added for Ollama client-side tokenization
 from PIL import Image
 from random_words import RandomWords
 
@@ -339,8 +340,21 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
     stream_gemini = verbose_debug # Specifically for Gemini streaming if verbose_debug is on
 
     try:
+        if verbose_debug:
+            logging.info(f"Gemini API Prompt for model '{model_name}':\n{prompt}")
+            # For very long prompts, you might want to log only a portion or a summary
+            # logging.info(f"Gemini API Prompt for model '{model_name}' (first 500 chars):\n{prompt[:500]}...")
+
         model = genai.GenerativeModel(model_name)
         generation_config = genai.types.GenerationConfig(temperature=temperature)
+
+        # Count tokens for Gemini prompt
+        try:
+            token_count_response = model.count_tokens(prompt)
+            prompt_token_count = token_count_response.total_tokens
+            logging.info(f"Gemini prompt token count for model '{model_name}': {prompt_token_count} tokens.")
+        except Exception as e_token:
+            logging.warning(f"Could not count tokens for Gemini prompt (model '{model_name}'): {e_token}")
 
         for attempt in range(max_retries):
             try:
@@ -450,6 +464,7 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
     base_url = ollama_config.get("base_url", "http://localhost:11434")
     model_name = ollama_config.get("model", "llama3") # Default Ollama model
     temperature = float(ollama_config.get("temperature", 0.7))
+    tokenizer_model_name = ollama_config.get("tokenizer_model", "NousResearch/Llama-3-8B-Instruct-hf") # Default Llama3 tokenizer
 
     max_retries = int(ollama_config.get("max_retries", default_max_retries))
     retry_delay = int(ollama_config.get("retry_delay_seconds", default_retry_delay))
@@ -465,6 +480,26 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
         "stream": stream_ollama,
         "options": {"temperature": temperature},
     }
+
+    if verbose_debug:
+        logging.info(f"Ollama API Prompt for model '{model_name}':\n{prompt}")
+        # For very long prompts, you might want to log only a portion or a summary
+        # logging.info(f"Ollama API Prompt for model '{model_name}' (first 500 chars):\n{prompt[:500]}...")
+
+    # Attempt client-side token counting for Ollama
+    # Note: For higher efficiency with many calls, consider loading the tokenizer once outside this function.
+    if tokenizer_model_name:
+        try:
+            logging.debug(f"Loading tokenizer: {tokenizer_model_name} for Ollama prompt token count.")
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_model_name)
+            token_ids = tokenizer.encode(prompt)
+            num_tokens = len(token_ids)
+            logging.info(f"Ollama client-side token count for prompt (tokenizer: '{tokenizer_model_name}', model: '{model_name}'): {num_tokens} tokens.")
+        except Exception as e_token_ollama:
+            logging.warning(f"Could not count tokens for Ollama prompt using tokenizer '{tokenizer_model_name}' (model: '{model_name}'): {e_token_ollama}")
+            logging.info(f"Ollama API for model '{model_name}': Standard Ollama API does not provide a direct prompt token count. Client-side estimation failed.")
+    else:
+        logging.info(f"Ollama API for model '{model_name}': No tokenizer_model configured for client-side token counting. Standard Ollama API does not provide a direct prompt token count.")
 
     for attempt in range(max_retries):
         try:
