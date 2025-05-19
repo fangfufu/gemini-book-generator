@@ -4141,6 +4141,8 @@ if __name__ == "__main__":
                 1,  # total_sections
                 chapter_summary,
                 writing_tone,
+                chapter_titles, # Pass all chapter titles
+                chapter_summaries, # Pass all chapter summaries
                 character_context_for_prompts,
             )
             body_matter[chap_title].append(
