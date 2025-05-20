@@ -1267,11 +1267,9 @@ def generate_chapter_outline(config, character_context=""):
     # e.g., "very " or ""
     actual_length_modifier_segment = f"{length_modifier} " if length_modifier else ""
 
-    if not is_fiction:  # Non-fiction: include "short"
-        # Examples: "very short list", "short list"
+    if not is_fiction:
         list_description_for_prompt = f"{actual_length_modifier_segment}short list"
-    else:  # Fiction: omit "short"
-        # Examples: "very list", "list"
+    else:
         list_description_for_prompt = f"{actual_length_modifier_segment}long list"
 
     prompt = f"""Generate a {list_description_for_prompt} of chapter titles for a
