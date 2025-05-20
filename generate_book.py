@@ -3495,8 +3495,19 @@ def assemble_marketing_docx(
         doc.add_paragraph("Random Topic Seed:", style="Heading 2")
         doc.add_paragraph(random_topic_seed)
 
-    model_name_used = config.get("gemini_model", "")
-    doc.add_paragraph("Gemini Model Used:", style="Heading 2")
+    api_settings_local = config.get("api_settings", {}) # Use a local var to avoid conflict
+    api_provider_local = api_settings_local.get("provider", "gemini")
+
+    model_name_used = ""
+    if api_provider_local == "gemini":
+        model_name_used = api_settings_local.get("gemini", {}).get("model", "")
+    elif api_provider_local == "ollama":
+        model_name_used = api_settings_local.get("ollama", {}).get("model", "")
+    else:
+        model_name_used = "[Unknown API Provider or Model]"
+        logging.warning(f"Unknown API provider '{api_provider_local}' when trying to get model name for marketing doc.")
+
+    doc.add_paragraph("LLM Model Used:", style="Heading 2")
     doc.add_paragraph(model_name_used)
 
     doc.add_paragraph("Main Topic:", style="Heading 2")
