@@ -31,9 +31,9 @@ from random_words import RandomWords
 
 # Configure Matplotlib to use LaTeX and load amsmath
 matplotlib.rcParams["text.usetex"] = True
-matplotlib.rcParams["text.latex.preamble"] = (
-    r"\usepackage{amsmath}  \usepackage{amssymb}"
-)
+matplotlib.rcParams[
+    "text.latex.preamble"
+] = r"\usepackage{amsmath}  \usepackage{amssymb}"
 
 # Ensure matplotlib doesn't try to use a GUI backend
 plt.switch_backend("Agg")
@@ -929,7 +929,7 @@ def generate_key_concepts(config):
     prompt = f"""Based on the main topic '{main_topic}' in a setting described as:
 "{setting}"
 
-Generate a list of distinct and relevant key concepts or
+Generate a short list of distinct and relevant key concepts or
 terms that would be central to exploring this topic within the setting.
 
 Format the output as a simple comma-separated list. Example:
@@ -976,6 +976,17 @@ British English."""
 def generate_book_subtitle(config, book_title, summary_context):
     """Generates a book subtitle based on the title, topic, and chapter summaries."""
     logging.info(f"Generating subtitle for book: '{book_title}' (using summaries)...")
+    gen_params = config.get("generation_params", {})
+
+    # Check if subtitle is provided in config
+    subtitle_from_config = gen_params.get("book_subtitle", "").strip()
+    if subtitle_from_config:
+        logging.info(f"Using book_subtitle from config: '{subtitle_from_config}'")
+        return subtitle_from_config
+
+    logging.info(
+        "No 'book_subtitle' found in config or it was empty. Attempting to auto-generate one."
+    )
 
     prompt = f"""Generate a subtitle for the book titled '{book_title}'.
 The main topic of the book is '{config['generation_params']['main_topic']}'.
@@ -1108,26 +1119,32 @@ def generate_character_list(config, book_title):
     """
     gen_params = config.get("generation_params", {})
 
-    # Decision logic for whether to proceed with generation attempt
-    proceed_with_generation_attempt = False
+    # Check for explicit override in config
+    config_override = gen_params.get(
+        "generate_character_list"
+    )  # Can be True, False, or None
 
-    if is_book_non_fiction(config, book_title):  # New helper function
-        logging.info(
-            "Book identified as non-fiction. Skipping character list generation."
-        )
-        gen_params["character_list"] = None  # Ensure key exists
-        return None
-    else:
-        logging.info(
-            "Book identified as fiction or type indeterminate. Attempting character list generation."
-        )
-        proceed_with_generation_attempt = True
+    should_generate = False  # Default assumption is no generation
 
-    if not proceed_with_generation_attempt:
-        # This path should ideally be covered by explicit False or non-fiction determination.
-        logging.warning(
-            "Decision was not to proceed with character list generation. Skipping."
+    if config_override is False:
+        # Config explicitly says NOT to generate
+        logging.info("Character list generation explicitly disabled by config.")
+        should_generate = False
+    elif config_override is True:
+        # Config explicitly says to generate (override fiction check)
+        logging.info(
+            "Character list generation explicitly enabled by config (overriding fiction check)."
         )
+        should_generate = True
+    else:  # config_override is None (key not present)
+        # Fall back to the fiction/non-fiction check
+        logging.info(
+            "Character list generation not explicitly set in config. Using fiction/non-fiction check."
+        )
+        should_generate = not is_book_non_fiction(config, book_title)
+
+    # If we decided not to generate, set the config key to None and return
+    if not should_generate:
         gen_params["character_list"] = None  # Ensure key exists
         return None
 
@@ -1575,8 +1592,9 @@ def generate_front_matter(
     }
 
     current_year = time.strftime("%Y")
-    front_matter["copyright_page"] = (
-        f"""
+    front_matter[
+        "copyright_page"
+    ] = f"""
 Copyright © {current_year} by {author_name}
 
 
@@ -1614,7 +1632,6 @@ a professional when appropriate. Neither the publisher nor the author shall be
 liable for any loss of profit or any other commercial damages, including but not
 limited to special, incidental, consequential, personal, or other damages.
 """.strip()
-    )
 
     common_prompt_base = f"""
 for the book '{book_title}' about {config['generation_params']['main_topic']}, with the setting:
@@ -3006,9 +3023,9 @@ def assemble_docx(
             title_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Title"].font.name = font_name
-            doc.styles["Title"].paragraph_format.alignment = (
-                WD_PARAGRAPH_ALIGNMENT.CENTER
-            )
+            doc.styles[
+                "Title"
+            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
         if "Subtitle" not in doc.styles:
             subtitle_style = doc.styles.add_style("Subtitle", WD_STYLE_TYPE.PARAGRAPH)
@@ -3020,9 +3037,9 @@ def assemble_docx(
             subtitle_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
             doc.styles["Subtitle"].font.name = font_name
-            doc.styles["Subtitle"].paragraph_format.alignment = (
-                WD_PARAGRAPH_ALIGNMENT.CENTER
-            )
+            doc.styles[
+                "Subtitle"
+            ].paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
         # Ensure List Bullet exists (as before)
         if "List Bullet" not in doc.styles:
@@ -3495,7 +3512,9 @@ def assemble_marketing_docx(
         doc.add_paragraph("Random Topic Seed:", style="Heading 2")
         doc.add_paragraph(random_topic_seed)
 
-    api_settings_local = config.get("api_settings", {}) # Use a local var to avoid conflict
+    api_settings_local = config.get(
+        "api_settings", {}
+    )  # Use a local var to avoid conflict
     api_provider_local = api_settings_local.get("provider", "gemini")
 
     model_name_used = ""
@@ -3505,7 +3524,9 @@ def assemble_marketing_docx(
         model_name_used = api_settings_local.get("ollama", {}).get("model", "")
     else:
         model_name_used = "[Unknown API Provider or Model]"
-        logging.warning(f"Unknown API provider '{api_provider_local}' when trying to get model name for marketing doc.")
+        logging.warning(
+            f"Unknown API provider '{api_provider_local}' when trying to get model name for marketing doc."
+        )
 
     doc.add_paragraph("LLM Model Used:", style="Heading 2")
     doc.add_paragraph(model_name_used)
@@ -3823,9 +3844,9 @@ if __name__ == "__main__":
             logging.warning(
                 "Failed to auto-generate key concepts. Proceeding with an empty list."
             )
-            generation_params["key_concepts"] = (
-                []
-            )  # Ensure it's an empty list on failure
+            generation_params[
+                "key_concepts"
+            ] = []  # Ensure it's an empty list on failure
 
     # Final log of the count being used
     final_count = len(generation_params.get("key_concepts", []))
@@ -3940,16 +3961,16 @@ if __name__ == "__main__":
         generated_tone = generate_writing_tone(config)  # API call
         if generated_tone:
             writing_tone = generated_tone
-            generation_params["writing_tone"] = (
-                generated_tone  # Update config in memory
-            )
+            generation_params[
+                "writing_tone"
+            ] = generated_tone  # Update config in memory
             logging.info(f"Auto-generated writing tone: '{writing_tone}'")
         else:
             # If generation fails, fall back to the default
             writing_tone = DEFAULT_WRITING_TONE
-            generation_params["writing_tone"] = (
-                writing_tone  # Store default back in config
-            )
+            generation_params[
+                "writing_tone"
+            ] = writing_tone  # Store default back in config
             logging.warning(
                 f"Failed to auto-generate writing tone. Using default: '{writing_tone}'"
             )
@@ -3971,8 +3992,24 @@ if __name__ == "__main__":
     # --- End Writing Tone Determination ---
 
     # --- Generate Core Book Structure ---
-    book_title = generate_book_title(config)  # API call
-    logging.info(f"Successfully generated Book Title: {book_title}")
+    # Check if book_title is provided in the config
+    book_title_from_config = generation_params.get("book_title", "").strip()
+
+    if book_title_from_config:
+        book_title = book_title_from_config
+        logging.info(f"Using Book Title from config: '{book_title}'")
+    else:
+        logging.info(
+            "No 'book_title' found in config or it was empty. Attempting to auto-generate one."
+        )
+        book_title = generate_book_title(config)  # API call, exits on failure
+        # generate_book_title exits if it fails or gets an empty title.
+        # If it returns, it's a valid, cleaned title.
+        logging.info(f"Successfully auto-generated Book Title: {book_title}")
+        # Optionally, store the generated title back into config if desired for consistency
+        # This ensures that if other parts of the code were to re-read it from config,
+        # they'd see the generated one.
+        generation_params["book_title"] = book_title
 
     # --- Determine if the book is fiction ---
     # This call will now use internal caching and set generation_params["is_fiction"]
