@@ -386,7 +386,7 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                             full_response_text_parts.append(response_part)
                         elif (
                             chunk.prompt_feedback and chunk.prompt_feedback.block_reason
-                        ):
+                        ):  # Prompt itself is blocked
                             logging.warning(
                                 f"Gemini API stream blocked. Reason: {chunk.prompt_feedback.block_reason}"
                             )
@@ -403,16 +403,23 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                     return final_text
                 else:  # Not streaming
                     response_text = None  # Initialize
-                    if response.parts:
-                        response_text = response.text
-                    elif (
+
+                    # Handle prompt feedback first: if the prompt itself was blocked, don't retry.
+                    if (
                         response.prompt_feedback
                         and response.prompt_feedback.block_reason
                     ):
                         logging.warning(
-                            f"API call blocked. Reason: {response.prompt_feedback.block_reason}"
+                            f"Gemini API call blocked due to prompt. Reason: {response.prompt_feedback.block_reason}. Will not retry."
                         )
-                        # response_text remains None
+                        return None  # Explicitly do not retry prompt blocks
+
+                    # If prompt was not blocked, check for response parts
+                    if response.parts:
+                        response_text = response.text
+                    # Removed the elif for prompt_feedback.block_reason here as it's handled above.
+                    # The case below is for when there are no parts, and it wasn't a prompt block.
+                    # This could be due to finish_reason (e.g., SAFETY on response, MAX_TOKENS).
                     else:
                         # Check finish reason even if parts are empty
                         finish_reason = "UNKNOWN"
@@ -428,29 +435,42 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                             )
 
                         logging.warning(
-                            f"API call returned no content or parts. Finish Reason: {finish_reason}"
+                            f"API call returned no content or parts (and was not prompt-blocked). Finish Reason: {finish_reason}. Will attempt retry if applicable."
                         )
                         # response_text remains None
 
                     if response_text is not None:  # Check if we got valid text
-                        # Logging success specific to Gemini
                         logging.info(
                             f"Gemini API call successful for model {model_name}."
                         )
                         return response_text
                     else:
                         logging.warning(
-                            f"API attempt {attempt + 1} failed (blocked or no content)."
+                            f"API attempt {attempt + 1} for model {model_name} resulted in no content (response_text is None). Will proceed to retry logic."
                         )
 
+            except genai.types.BlockedPromptException as bpe:
+                logging.error(
+                    f"Gemini API call attempt {attempt + 1} for model {model_name} failed due to a blocked prompt: {bpe}. Will not retry."
+                )
+                return None  # Do not retry if the prompt itself is blocked
+            except genai.types.StopCandidateException as sce:
+                # This exception means the response generation was stopped (e.g., safety, recitation).
+                # Retrying might yield a different result, especially with temperature > 0.
+                logging.warning(
+                    f"Gemini API call attempt {attempt + 1} for model {model_name} stopped during candidate generation: {sce}. Retrying..."
+                )
+                # No 'return None' here, so it falls through to the retry delay logic.
             except Exception as e:
                 logging.warning(
                     f"Gemini API call attempt {attempt + 1} for model {model_name} failed: {e}"
                 )
-                # Specific error handling for Gemini if needed, e.g., quota errors
                 if "quota" in str(e).lower():  # Basic check for quota issues
-                    logging.error(f"Gemini API quota likely exceeded: {e}")
-                    return None  # Don't retry quota issues immediately
+                    logging.warning(
+                        f"Gemini API quota likely exceeded: {e}. Retrying as per configuration..."
+                    )
+                    # Removed 'return None' to allow retry for quota issues
+                # For other general exceptions, the loop will continue to the retry logic.
 
             if attempt < max_retries - 1:
                 logging.info(f"Retrying Gemini API call in {retry_delay} seconds...")
@@ -909,7 +929,7 @@ def generate_key_concepts(config):
     prompt = f"""Based on the main topic '{main_topic}' in a setting described as:
 "{setting}"
 
-Generate a extremely short list of distinct and relevant key concepts or
+Generate a list of distinct and relevant key concepts or
 terms that would be central to exploring this topic within the setting.
 
 Format the output as a simple comma-separated list. Example:
@@ -1087,34 +1107,21 @@ def generate_character_list(config, book_title):
     if enabled in the config or if the book is determined to be fiction.
     """
     gen_params = config.get("generation_params", {})
-    generate_explicit_setting = gen_params.get("generate_character_list", None)
 
     # Decision logic for whether to proceed with generation attempt
     proceed_with_generation_attempt = False
-    if generate_explicit_setting:
-        logging.info("Character list generation is explicitly enabled in config.")
-        proceed_with_generation_attempt = True
-    elif generate_explicit_setting is not None:
+
+    if is_book_non_fiction(config, book_title):  # New helper function
         logging.info(
-            "Character list generation is explicitly disabled in config. Skipping."
+            "Book identified as non-fiction. Skipping character list generation."
         )
         gen_params["character_list"] = None  # Ensure key exists
         return None
-    else:  # Not specified (None) or other non-boolean values
+    else:
         logging.info(
-            "'generate_character_list' not specified or invalid in config. Determining based on book type..."
+            "Book identified as fiction or type indeterminate. Attempting character list generation."
         )
-        if is_book_non_fiction(config, book_title):  # New helper function
-            logging.info(
-                "Book identified as non-fiction by LLM. Skipping character list generation."
-            )
-            gen_params["character_list"] = None  # Ensure key exists
-            return None
-        else:
-            logging.info(
-                "Book identified as fiction or type indeterminate by LLM. Attempting character list generation."
-            )
-            proceed_with_generation_attempt = True
+        proceed_with_generation_attempt = True
 
     if not proceed_with_generation_attempt:
         # This path should ideally be covered by explicit False or non-fiction determination.
@@ -2461,7 +2468,6 @@ def add_paragraph_from_html_node(
                     config,
                     usable_width_inches,
                     equation_image_dir,
-                    list_level=list_level,
                 )
                 if not p.text and not p.runs:
                     logging.debug(
