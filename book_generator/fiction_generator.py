@@ -41,7 +41,7 @@ Output in British English.
         return None
 
 
-def generate_fiction_chapter_outline(config, overall_story, character_context=""):
+def generate_fiction_chapter_outline(config, overall_story, character_context="", fiction_chapter_count=20):
     """Generates a list of chapter titles and summaries for a fiction book."""
     logging.info("Generating fiction chapter outline (titles and summaries)...")
     prompt = f"""
@@ -53,7 +53,7 @@ Based on the following overall story:
 And the following characters:
 {character_context}
 
-Break down the story into 50 chapters. For each chapter, provide a title and a one-paragraph summary.
+Break down the story into {fiction_chapter_count} chapters. For each chapter, provide a title and a one-paragraph summary.
 The chapters should logically follow the progression of the story.
 
 Format the output as a numbered list of chapters. For each chapter, provide the title and then the summary.

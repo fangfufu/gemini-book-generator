@@ -36,6 +36,9 @@ generation_params:
   # generation, disable chapter section generation.
   is_fiction: true
 
+  # The number of chapters to generate for a fiction book.
+  fiction_chapter_count: 20
+
   # Whether to autogenerate a character list. This should only be turned on when
   # you are generating a novel. If this is not set, it is automatically 
   # controlled by is_fiction.
@@ -137,3 +140,5 @@ style_params:
 debug_options:
   verbose_debug: true
   save_intermediate_html: true
+  # Set to a file path to redirect logs, e.g., "logs/book.log". If not set, logs to console.
+  log_output_path: "logs/book.log"

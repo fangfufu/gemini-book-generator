@@ -62,7 +62,8 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
 
     # 3. Break down the story into chapters.
     logging.info("--- Generating Fiction Chapter Outline (Titles and Summaries) ---")
-    chapters = generate_fiction_chapter_outline(config, overall_story, character_context_for_prompts)
+    fiction_chapter_count = generation_params.get("fiction_chapter_count", 20)
+    chapters = generate_fiction_chapter_outline(config, overall_story, character_context_for_prompts, fiction_chapter_count)
     if not chapters:
         logging.critical("Fatal: Failed to generate chapter outline. Exiting.")
         sys.exit(1)
