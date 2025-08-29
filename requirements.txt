@@ -11,3 +11,4 @@ pymdown-extensions
 transformers
 tokenizers
 sentencepiece
+PySide6
