@@ -623,6 +623,7 @@ def generate_front_matter(
 
     # Subtitle generation already calls call_llm_api with its own prefix
     book_subtitle = generate_book_subtitle(config, book_title, summary_context)
+    config.get("generation_params", {})["book_subtitle"] = book_subtitle
 
     front_matter["title_page"] = {
         "title": book_title,

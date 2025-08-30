@@ -105,6 +105,11 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
     else:
         summary_context = "[No chapter summaries available]"
 
+    # --- Generate Overall Summary and Save to Markdown ---
+    overall_summary_text = generate_overall_summary(config, book_title, summary_context)
+    save_summary_to_markdown(book_title, overall_summary_text, output_base_dir)
+    # --- End Overall Summary Generation ---
+
     logging.info("--- Generating Front Matter, Back Matter, and Marketing Content ---")
     front_matter_content = generate_front_matter(
         config,
