@@ -14,23 +14,22 @@ def run_cli():
     log_output_path = debug_options.get("log_output_path")
 
     # Configure logging
-    log_handlers = []
+    log_handlers = [logging.StreamHandler(sys.stdout)]
     if log_output_path:
         try:
             log_dir = pathlib.Path(log_output_path).parent
             log_dir.mkdir(parents=True, exist_ok=True)
             log_handlers.append(logging.FileHandler(log_output_path, mode='w'))
         except Exception as e:
-            logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-            logging.error(f"Failed to configure file logging: {e}. Falling back to console logging.")
-
-    # Always add a console logger
-    log_handlers.append(logging.StreamHandler())
+            # Can't use logger here.
+            print(f"Failed to configure file logging: {e}. "
+                  f"Falling back to console logging.", file=sys.stderr)
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=log_handlers
+        handlers=log_handlers,
+        force=True
     )
 
     logging.info("Starting book generation process from CLI...")
