@@ -55,7 +55,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
 
     # 2. Create an overall story based on the prompt.
     logging.info("--- Generating Overall Story ---")
-    overall_story = generate_overall_story(config, character_context_for_prompts)
+    overall_story = generate_overall_story(config, character_context_for_prompts, writing_tone)
     if not overall_story:
         logging.critical("Fatal: Failed to generate the overall story. Exiting.")
         sys.exit(1)
@@ -63,7 +63,13 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
     # 3. Break down the story into chapters.
     logging.info("--- Generating Fiction Chapter Outline (Titles and Summaries) ---")
     fiction_chapter_count = generation_params.get("fiction_chapter_count", 20)
-    chapters = generate_fiction_chapter_outline(config, overall_story, character_context_for_prompts, fiction_chapter_count)
+    chapters = generate_fiction_chapter_outline(
+        config,
+        overall_story,
+        character_context_for_prompts,
+        fiction_chapter_count,
+        writing_tone,
+    )
     if not chapters:
         logging.critical("Fatal: Failed to generate chapter outline. Exiting.")
         sys.exit(1)
@@ -86,6 +92,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
             previous_chapter_summary,
             chapter_title,
             character_context_for_prompts,
+            writing_tone,
         )
 
         body_matter[chapter_title] = [{"title": "", "content": chapter_content}]
@@ -618,7 +625,8 @@ def run_generation_process():
         logging.info(
             "No 'writing_tone' found or it was empty in config. Attempting to auto-generate one."
         )
-        generated_tone = generate_writing_tone(config)
+        is_fiction = generation_params.get("is_fiction", False)
+        generated_tone = generate_writing_tone(config, is_fiction=is_fiction)
         if generated_tone:
             writing_tone = generated_tone
             generation_params["writing_tone"] = (

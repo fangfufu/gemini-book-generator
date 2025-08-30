@@ -9,7 +9,7 @@ from book_generator.llm_api import call_llm_api
 from book_generator.utils import sanitize_filename
 
 
-def generate_overall_story(config, character_context=""):
+def generate_overall_story(config, character_context="", writing_tone=""):
     """Generates the overall story for a fiction book."""
     logging.info("Generating overall story...")
     main_topic = config.get("generation_params", {}).get("main_topic", "[No Main Topic Provided]")
@@ -23,6 +23,7 @@ Based on the main topic '{main_topic}', a setting described as:
 Write a  detailed overall story of about 2000 words. This story will serve as the master plot for the entire book.
 The story should have a clear beginning, middle, and end.
 It should introduce the main conflict, develop the plot, and provide a resolution.
+The writing tone should be: {writing_tone}.
 Output only the story text. Do not add introductory text.
 Output in British English.
 """
@@ -41,7 +42,7 @@ Output in British English.
         return None
 
 
-def generate_fiction_chapter_outline(config, overall_story, character_context="", fiction_chapter_count=20):
+def generate_fiction_chapter_outline(config, overall_story, character_context="", fiction_chapter_count=20, writing_tone=""):
     """Generates a list of chapter titles and summaries for a fiction book."""
     logging.info("Generating fiction chapter outline (titles and summaries)...")
     prompt = f"""
@@ -55,6 +56,7 @@ And the following characters:
 
 Break down the story into {fiction_chapter_count} chapters. For each chapter, provide a title and a one-paragraph summary.
 The chapters should logically follow the progression of the story.
+The writing tone for the summaries should be: {writing_tone}.
 
 Format the output as a numbered list of chapters. For each chapter, provide the title and then the summary.
 Example:
@@ -95,6 +97,7 @@ def generate_fiction_chapter_content(
     previous_chapter_summary,
     chapter_title,
     character_context="",
+    writing_tone="",
 ):
     """Generates the content for a single fiction chapter."""
     logging.info(f"Generating content for fiction chapter: '{chapter_title}'...")
@@ -106,11 +109,13 @@ Context:
 - Previous Chapter Title: '{previous_chapter_title}'
 - Previous Chapter Summary: '{previous_chapter_summary}'
 - Current Chapter Title: '{chapter_title}'
+- Writing Tone: {writing_tone}
 
 Task:
 Write a detailed chapter for the book, focusing on the story elements relevant to the current chapter title.
 The chapter should be approximately 2000 words long.
 Ensure the chapter is distinct from the previous chapter and logically follows the overall story.
+Adhere strictly to the specified writing tone.
 Avoid repetition.
 
 Instructions:

@@ -180,26 +180,28 @@ Output in British English."""
         return None
 
 
-def generate_writing_tone(config):
+def generate_writing_tone(config, is_fiction=False):
     """Generates a suitable writing tone using the Gemini API."""
-    logging.info("Auto-generating writing tone...")
+    logging.info(f"Auto-generating writing tone (is_fiction: {is_fiction})...")
     main_topic = config.get("generation_params", {}).get(
         "main_topic", "[No Main Topic Provided]"
     )
     setting = config.get("generation_params", {}).get(
-        "setting", "[No  Setting Provided]"
+        "setting", "[No Setting Provided]"
     )
 
-    if main_topic == "[No Main Topic Provided]" or setting == "[No  Setting Provided]":
+    genre_prompt_part = "a fictional novel" if is_fiction else "a non-fiction book"
+
+    if main_topic == "[No Main Topic Provided]" or setting == "[No Setting Provided]":
         logging.error(
             "Cannot generate specific writing tone without 'main_topic' and 'setting'. Using a generic prompt."
         )
         prompt = f"""Generate some words describing a suitable writing tone
-for a book. Output only the phrase describing the tone. Do not add introductory
+for {genre_prompt_part}. Output only the phrase describing the tone. Do not add introductory
 text. Output in British English."""
     else:
         prompt = f"""Based on the main topic '{main_topic}', a setting described as:
-"{setting}", generate some words describing the most suitable writing tone for a book exploring this
+"{setting}", generate some words describing the most suitable writing tone for {genre_prompt_part} exploring this
 topic. Output *only* the phrase describing the tone. Do not add introductory
 text. Output in British English."""
     tone_text = call_llm_api(prompt, config, cache_prefix="writing_tone")
