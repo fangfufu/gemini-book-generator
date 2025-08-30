@@ -141,6 +141,8 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
             main_filename_stem,
             equation_image_dir,
             output_base_dir,
+            overall_story=overall_story,
+            chapter_breakdown=chapters,
         )
     else:
         logging.error(
@@ -288,6 +290,8 @@ def run_generation_process_non_fiction(config, output_base_dir, equation_image_d
             main_filename_stem,
             equation_image_dir,
             output_base_dir,
+            overall_story=None,
+            chapter_breakdown=None,
         )
     else:
         logging.error(

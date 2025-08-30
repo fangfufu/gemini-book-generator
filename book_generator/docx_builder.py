@@ -1692,6 +1692,8 @@ def assemble_marketing_docx(
     main_book_filename_stem,
     equation_image_dir,
     output_dir,
+    overall_story=None,
+    chapter_breakdown=None,
 ):
     """
     Assembles the separate marketing DOCX file using python-docx.
@@ -1831,6 +1833,38 @@ def assemble_marketing_docx(
         context_label="Marketing_Blurb",
     )
     doc.add_page_break()
+
+    # --- Add Overall Story Section (Fiction Only) ---
+    if overall_story:
+        doc.add_paragraph("Overall Story", style="Heading 1")
+        markdown_to_docx(
+            overall_story,
+            doc,
+            doc,
+            config,
+            None,
+            equation_image_dir,
+            context_label="Marketing_OverallStory",
+        )
+        doc.add_page_break()
+
+    # --- Add Chapter Breakdown Section (Fiction Only) ---
+    if chapter_breakdown:
+        doc.add_paragraph("Chapter Breakdown", style="Heading 1")
+        for i, chapter in enumerate(chapter_breakdown):
+            chapter_title = chapter.get("title", f"Chapter {i+1}")
+            chapter_summary = chapter.get("summary", "[No summary provided]")
+            doc.add_paragraph(f"Chapter {i+1}: {chapter_title}", style="Heading 2")
+            markdown_to_docx(
+                chapter_summary,
+                doc,
+                doc,
+                config,
+                None,
+                equation_image_dir,
+                context_label=f"Marketing_Chapter_{i+1}",
+            )
+        doc.add_page_break()
 
     # --- Add Book Summary Section ---
     doc.add_paragraph("Book Summary (from Chapter Summaries)", style="Heading 1")
