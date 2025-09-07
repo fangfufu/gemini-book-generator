@@ -92,10 +92,10 @@ Output in British English.
 
 def generate_fiction_chapter_content(
     config,
-    overall_story,
     previous_chapter_title,
     previous_chapter_summary,
     chapter_title,
+    chapter_summary,
     character_context="",
     writing_tone="",
 ):
@@ -104,17 +104,17 @@ def generate_fiction_chapter_content(
 
     prompt = f"""
 Context:
-- Book's Overall Story: {overall_story}
 - Characters: {character_context}
 - Previous Chapter Title: '{previous_chapter_title}'
 - Previous Chapter Summary: '{previous_chapter_summary}'
 - Current Chapter Title: '{chapter_title}'
+- Current Chapter Summary: '{chapter_summary}'
 - Writing Tone: {writing_tone}
 
 Task:
-Write a detailed chapter for the book, focusing on the story elements relevant to the current chapter title.
+Write a detailed chapter for the book, based on its summary, focusing on the story elements relevant to the current chapter title.
 The chapter should be approximately 2000 words long.
-Ensure the chapter is distinct from the previous chapter and logically follows the overall story.
+Ensure the chapter is distinct from the previous chapter.
 Adhere strictly to the specified writing tone.
 Avoid repetition.
 
