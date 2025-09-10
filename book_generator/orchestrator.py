@@ -79,6 +79,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
     body_matter = {}
     previous_chapter_title = ""
     previous_chapter_summary = ""
+    previous_chapter_content = ""
 
     for i, chapter in enumerate(chapters):
         chapter_title = chapter.get("title")
@@ -89,6 +90,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
             config,
             previous_chapter_title,
             previous_chapter_summary,
+            previous_chapter_content,
             chapter_title,
             chapter_summary,
             character_context_for_prompts,
@@ -99,6 +101,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
 
         previous_chapter_title = chapter_title
         previous_chapter_summary = chapter_summary
+        previous_chapter_content = chapter_content
 
     summary_parts = []
     for i, chapter in enumerate(chapters):

@@ -93,9 +93,8 @@ Output in British English.
 def generate_fiction_chapter_content(
     config,
     previous_chapter_title,
-    previous_chapter_summary,
+    previous_chapter_content,
     chapter_title,
-    chapter_summary,
     character_context="",
     writing_tone="",
 ):
@@ -106,9 +105,8 @@ def generate_fiction_chapter_content(
 Context:
 - Characters: {character_context}
 - Previous Chapter Title: '{previous_chapter_title}'
-- Previous Chapter Summary: '{previous_chapter_summary}'
+- Previous Chapter Content: '{previous_chapter_content}'
 - Current Chapter Title: '{chapter_title}'
-- Current Chapter Summary: '{chapter_summary}'
 - Writing Tone: {writing_tone}
 
 Task:
@@ -116,7 +114,7 @@ Write a detailed chapter for the book, based on its summary, focusing on the sto
 The chapter should be approximately 2000 words long.
 Ensure the chapter is distinct from the previous chapter.
 Adhere strictly to the specified writing tone.
-Avoid repetition.
+Avoid repetition and the structure of the previous chapter.
 
 Instructions:
 - Output *only* the text content for this chapter.
