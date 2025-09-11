@@ -95,6 +95,7 @@ def generate_fiction_chapter_content(
     previous_chapter_title,
     previous_chapter_content,
     chapter_title,
+    chapter_summary,
     character_context="",
     writing_tone="",
 ):
@@ -107,6 +108,7 @@ Context:
 - Previous Chapter Title: '{previous_chapter_title}'
 - Previous Chapter Content: '{previous_chapter_content}'
 - Current Chapter Title: '{chapter_title}'
+- Current Chapter Summary: '{chapter_summary}'
 - Writing Tone: {writing_tone}
 
 Task:

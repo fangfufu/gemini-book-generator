@@ -91,6 +91,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
             previous_chapter_title,
             previous_chapter_content,
             chapter_title,
+            chapter_summary,
             character_context_for_prompts,
             writing_tone,
         )
