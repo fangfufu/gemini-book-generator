@@ -89,10 +89,8 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
         chapter_content = generate_fiction_chapter_content(
             config,
             previous_chapter_title,
-            previous_chapter_summary,
             previous_chapter_content,
             chapter_title,
-            chapter_summary,
             character_context_for_prompts,
             writing_tone,
         )
