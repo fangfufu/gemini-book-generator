@@ -92,6 +92,7 @@ Output in British English.
 
 def generate_fiction_chapter_content(
     config,
+    overall_story,
     previous_chapter_title,
     previous_chapter_content,
     chapter_title,
@@ -103,20 +104,35 @@ def generate_fiction_chapter_content(
     logging.info(f"Generating content for fiction chapter: '{chapter_title}'...")
 
     prompt = f"""
-Context:
-- Characters: {character_context}
-- Previous Chapter Title: '{previous_chapter_title}'
-- Previous Chapter Content: '{previous_chapter_content}'
-- Current Chapter Title: '{chapter_title}'
-- Current Chapter Summary: '{chapter_summary}'
-- Writing Tone: {writing_tone}
+You are a fiction writer. Your task is to write a single chapter of a book.
+The chapter must logically and narratively continue from the previous chapter.
+It must also align with the overall story of the book.
+Avoid repeating the structure and content of the previous chapter.
 
-Task:
-Write a detailed chapter for the book, based on its summary, focusing on the story elements relevant to the current chapter title.
+Here is the context for your writing:
+
+--- Overall Story ---
+{overall_story}
+--- End Overall Story ---
+
+--- Previous Chapter ---
+Title: {previous_chapter_title}
+Content:
+{previous_chapter_content}
+--- End Previous Chapter ---
+
+--- Current Chapter ---
+Title: {chapter_title}
+Summary: {chapter_summary}
+--- End Current Chapter ---
+
+Characters:
+{character_context}
+
+Writing Tone: {writing_tone}
+
+Based on all the context provided, write the full content of the current chapter.
 The chapter should be approximately 2000 words long.
-Ensure the chapter is distinct from the previous chapter.
-Adhere strictly to the specified writing tone.
-Avoid repetition and the structure of the previous chapter.
 
 Instructions:
 - Output *only* the text content for this chapter.
