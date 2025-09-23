@@ -78,6 +78,7 @@ api_settings:
   provider: "gemini"  # Can be "gemini" or "ollama" (Update as per your previous change)
 
   # Default settings applicable to API calls, can be overridden by provider-specific sections.
+  terminate_on_api_failure: true
   default_max_retries: 10
   default_retry_delay_seconds: 30
   base_cache_dir: "api_cache"     # Base directory for API call caching

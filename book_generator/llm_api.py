@@ -260,10 +260,16 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
         logging.error(
             f"Gemini API call for model {model_name} failed after {max_retries} attempts."
         )
+        if api_settings_conf.get("terminate_on_api_failure", False):
+            logging.critical("Terminating program due to repeated API failures.")
+            sys.exit(1)
         return None  # Explicitly return None after all retries fail
 
     except Exception as e:
         logging.error(f"An unexpected error occurred during Gemini API call setup: {e}")
+        if api_settings_conf.get("terminate_on_api_failure", False):
+            logging.critical("Terminating program due to unexpected API error.")
+            sys.exit(1)
         return None
 
 
@@ -461,6 +467,11 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
             logging.error(
                 f"Ollama API call for model '{model_name}' failed after {max_retries} attempts."
             )
+            if api_settings_conf.get("terminate_on_api_failure", False):
+                logging.critical(
+                    "Terminating program due to repeated API failures."
+                )
+                sys.exit(1)
             return None
     return None  # Should be covered by loop logic, but as a safeguard
 
