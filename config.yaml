@@ -116,6 +116,11 @@ api_settings:
     context_window_size: 32000
 
 style_params:
+  # Optional path to a .docx file to use as a stylesheet.
+  # If provided, the styles from this document will be used.
+  # If commented out or empty, default styles will be created.
+  # style_docx: "path/to/your/stylesheet.docx"
+
   font_name: "Cambria"
   font_size: 11
 

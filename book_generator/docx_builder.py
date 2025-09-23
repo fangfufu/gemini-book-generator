@@ -1173,143 +1173,166 @@ def assemble_docx(
     inside_margin_mm = margin_config_mm.get("right", default_inside_mm)
     gutter_margin_mm = margin_config_mm.get("gutter", default_gutter_mm)
 
-    doc = Document()
+    style_docx_path = style_config.get("style_docx")
+    doc = None
+    template_used = False
+
+    if style_docx_path:
+        try:
+            # Use pathlib.Path for robustness
+            style_path = pathlib.Path(style_docx_path)
+            if style_path.is_file():
+                doc = Document(style_path)
+                template_used = True
+                logging.info(f"Loaded styles from template: {style_docx_path}")
+            else:
+                logging.error(
+                    f"Stylesheet '{style_docx_path}' not found. Falling back to default styles."
+                )
+        except Exception as e:
+            logging.error(
+                f"Error loading stylesheet '{style_docx_path}': {e}. Falling back to default styles."
+            )
+
+    if doc is None:
+        doc = Document()
+        logging.info("No valid stylesheet provided. Creating document with default styles.")
 
     # --- Basic Style Setup ---
-    try:
-        style = doc.styles["Normal"]
-        style.font.name = font_name
-        style.font.size = Pt(font_size)
-        style.paragraph_format.space_after = Pt(0)
-        style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    # Only run this setup if we are NOT using a pre-defined template
+    if not template_used:
+        logging.info("Applying default programmatically-defined styles...")
+        try:
+            style = doc.styles["Normal"]
+            style.font.name = font_name
+            style.font.size = Pt(font_size)
+            style.paragraph_format.space_after = Pt(0)
+            style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
 
-        # Ensure heading styles use the base font and add spacing
-        for i in range(1, 7):
-            heading_style_name = f"Heading {i}"
-            if heading_style_name in doc.styles:
-                h_style = doc.styles[heading_style_name]
-                h_style.font.name = font_name
-                # Add some default spacing (can be overridden in config later)
-                if i == 1:
-                    h_style.paragraph_format.space_before = Pt(18)
-                    h_style.paragraph_format.space_after = Pt(6)
-                elif i == 2:
-                    h_style.paragraph_format.space_before = Pt(12)
-                    h_style.paragraph_format.space_after = Pt(4)
+            # Ensure heading styles use the base font and add spacing
+            for i in range(1, 7):
+                heading_style_name = f"Heading {i}"
+                if heading_style_name in doc.styles:
+                    h_style = doc.styles[heading_style_name]
+                    h_style.font.name = font_name
+                    # Add some default spacing (can be overridden in config later)
+                    if i == 1:
+                        h_style.paragraph_format.space_before = Pt(18)
+                        h_style.paragraph_format.space_after = Pt(6)
+                    elif i == 2:
+                        h_style.paragraph_format.space_before = Pt(12)
+                        h_style.paragraph_format.space_after = Pt(4)
+                    else:
+                        h_style.paragraph_format.space_before = Pt(6)
+                        h_style.paragraph_format.space_after = Pt(2)
+
+            # Ensure Title/Subtitle styles use the base font (or define them)
+            if "Title" not in doc.styles:
+                title_style = doc.styles.add_style("Title", WD_STYLE_TYPE.PARAGRAPH)
+                title_style.base_style = doc.styles["Normal"]
+                title_style.font.name = font_name
+                title_style.font.size = Pt(28)  # Example size
+                title_style.font.bold = True
+                title_style.paragraph_format.space_after = Pt(6)
+                title_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            else:
+                doc.styles["Title"].font.name = font_name
+                doc.styles["Title"].paragraph_format.alignment = (
+                    WD_PARAGRAPH_ALIGNMENT.CENTER
+                )
+
+            if "Subtitle" not in doc.styles:
+                subtitle_style = doc.styles.add_style("Subtitle", WD_STYLE_TYPE.PARAGRAPH)
+                subtitle_style.base_style = doc.styles["Normal"]
+                subtitle_style.font.name = font_name
+                subtitle_style.font.size = Pt(16)  # Example size
+                subtitle_style.font.italic = True
+                subtitle_style.paragraph_format.space_after = Pt(18)
+                subtitle_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            else:
+                doc.styles["Subtitle"].font.name = font_name
+                doc.styles["Subtitle"].paragraph_format.alignment = (
+                    WD_PARAGRAPH_ALIGNMENT.CENTER
+                )
+
+            # Ensure List Bullet exists (as before)
+            if "List Bullet" not in doc.styles:
+                lb_style = doc.styles.add_style("List Bullet", WD_STYLE_TYPE.PARAGRAPH)
+                lb_style.base_style = doc.styles["Normal"]
+                # TODO: Define actual bullet point and indentation via Oxml or basic properties
+                lb_style.paragraph_format.left_indent = Inches(0.25)  # Example
+                lb_style.paragraph_format.first_line_indent = Inches(
+                    -0.25
+                )  # Example hanging indent
+            else:  # Ensure base style has some indent
+                lb_style = doc.styles["List Bullet"]
+                if lb_style.paragraph_format.left_indent is None:
+                    lb_style.paragraph_format.left_indent = Inches(0.25)
+                if lb_style.paragraph_format.first_line_indent is None:
+                    lb_style.paragraph_format.first_line_indent = Inches(-0.25)
+
+            # Define nested styles (add more as needed)
+            for i in range(2, 5):  # Define List Bullet 2, 3, 4
+                style_name = f"List Bullet {i}"
+                base_style_name = (
+                    f"List Bullet {i-1}" if i > 2 else "List Bullet"
+                )  # Base on previous level
+                if style_name not in doc.styles:
+                    lb_nested_style = doc.styles.add_style(
+                        style_name, WD_STYLE_TYPE.PARAGRAPH
+                    )
+                    # Base on previous level if possible, otherwise Normal
+                    base_style = (
+                        doc.styles[base_style_name]
+                        if base_style_name in doc.styles
+                        else doc.styles["Normal"]
+                    )
+                    lb_nested_style.base_style = base_style
+                    # Increase indentation relative to base style or set absolute
+                    # Example: Add 0.25 inches per level
+                    indent_inches = (i - 1) * 0.35  # Adjust multiplier as needed
+                    lb_nested_style.paragraph_format.left_indent = Inches(indent_inches)
+                    # Keep hanging indent consistent or adjust if needed
+                    lb_nested_style.paragraph_format.first_line_indent = Inches(-0.25)
+                    logging.info(
+                        f"Defined style '{style_name}' with left indent {indent_inches} inches."
+                    )
                 else:
-                    h_style.paragraph_format.space_before = Pt(6)
-                    h_style.paragraph_format.space_after = Pt(2)
+                    # Optionally ensure indentation is correct on existing styles
+                    lb_nested_style = doc.styles[style_name]
+                    indent_inches = (i - 1) * 0.35
+                    if lb_nested_style.paragraph_format.left_indent != Inches(
+                        indent_inches
+                    ):
+                        logging.debug(f"Adjusting indent for existing style '{style_name}'")
+                        lb_nested_style.paragraph_format.left_indent = Inches(indent_inches)
+                        lb_nested_style.paragraph_format.first_line_indent = Inches(-0.25)
 
-        # Ensure Title/Subtitle styles use the base font (or define them)
-        if "Title" not in doc.styles:
-            title_style = doc.styles.add_style("Title", WD_STYLE_TYPE.PARAGRAPH)
-            title_style.base_style = doc.styles["Normal"]
-            title_style.font.name = font_name
-            title_style.font.size = Pt(28)  # Example size
-            title_style.font.bold = True
-            title_style.paragraph_format.space_after = Pt(6)
-            title_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        else:
-            doc.styles["Title"].font.name = font_name
-            doc.styles["Title"].paragraph_format.alignment = (
-                WD_PARAGRAPH_ALIGNMENT.CENTER
-            )
-
-        if "Subtitle" not in doc.styles:
-            subtitle_style = doc.styles.add_style("Subtitle", WD_STYLE_TYPE.PARAGRAPH)
-            subtitle_style.base_style = doc.styles["Normal"]
-            subtitle_style.font.name = font_name
-            subtitle_style.font.size = Pt(16)  # Example size
-            subtitle_style.font.italic = True
-            subtitle_style.paragraph_format.space_after = Pt(18)
-            subtitle_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        else:
-            doc.styles["Subtitle"].font.name = font_name
-            doc.styles["Subtitle"].paragraph_format.alignment = (
-                WD_PARAGRAPH_ALIGNMENT.CENTER
-            )
-
-        # Ensure List Bullet exists (as before)
-        if "List Bullet" not in doc.styles:
-            lb_style = doc.styles.add_style("List Bullet", WD_STYLE_TYPE.PARAGRAPH)
-            lb_style.base_style = doc.styles["Normal"]
-            # TODO: Define actual bullet point and indentation via Oxml or basic properties
-            lb_style.paragraph_format.left_indent = Inches(0.25)  # Example
-            lb_style.paragraph_format.first_line_indent = Inches(
-                -0.25
-            )  # Example hanging indent
-        else:  # Ensure base style has some indent
-            lb_style = doc.styles["List Bullet"]
-            if lb_style.paragraph_format.left_indent is None:
-                lb_style.paragraph_format.left_indent = Inches(0.25)
-            if lb_style.paragraph_format.first_line_indent is None:
-                lb_style.paragraph_format.first_line_indent = Inches(-0.25)
-
-        # Define nested styles (add more as needed)
-        for i in range(2, 5):  # Define List Bullet 2, 3, 4
-            style_name = f"List Bullet {i}"
-            base_style_name = (
-                f"List Bullet {i-1}" if i > 2 else "List Bullet"
-            )  # Base on previous level
-            if style_name not in doc.styles:
-                lb_nested_style = doc.styles.add_style(
-                    style_name, WD_STYLE_TYPE.PARAGRAPH
-                )
-                # Base on previous level if possible, otherwise Normal
-                base_style = (
-                    doc.styles[base_style_name]
-                    if base_style_name in doc.styles
-                    else doc.styles["Normal"]
-                )
-                lb_nested_style.base_style = base_style
-                # Increase indentation relative to base style or set absolute
-                # Example: Add 0.25 inches per level
-                indent_inches = (i - 1) * 0.35  # Adjust multiplier as needed
-                lb_nested_style.paragraph_format.left_indent = Inches(indent_inches)
-                # Keep hanging indent consistent or adjust if needed
-                lb_nested_style.paragraph_format.first_line_indent = Inches(-0.25)
+            # --- Define Code Block Style ---
+            code_style_name = "CodeBlock"
+            if code_style_name not in doc.styles:
+                code_style = doc.styles.add_style(code_style_name, WD_STYLE_TYPE.PARAGRAPH)
+                # Base on 'No Spacing' if it exists for minimal vertical space, else 'Normal'
+                base_style_name = "No Spacing" if "No Spacing" in doc.styles else "Normal"
+                code_style.base_style = doc.styles[base_style_name]
+                code_style.font.name = "Courier New"  # Monospace font
+                code_style.font.size = Pt(10)  # Slightly smaller size often looks good
                 logging.info(
-                    f"Defined style '{style_name}' with left indent {indent_inches} inches."
+                    f"Defined '{code_style_name}' style based on '{base_style_name}'."
                 )
             else:
-                # Optionally ensure indentation is correct on existing styles
-                lb_nested_style = doc.styles[style_name]
-                indent_inches = (i - 1) * 0.35
-                if lb_nested_style.paragraph_format.left_indent != Inches(
-                    indent_inches
-                ):
-                    logging.debug(f"Adjusting indent for existing style '{style_name}'")
-                    lb_nested_style.paragraph_format.left_indent = Inches(indent_inches)
-                    lb_nested_style.paragraph_format.first_line_indent = Inches(-0.25)
+                # Ensure existing style uses monospace font
+                existing_code_style = doc.styles[code_style_name]
+                existing_code_style.font.name = "Courier New"
+                existing_code_style.font.size = Pt(10)
+                logging.info(f"Ensured '{code_style_name}' style uses Courier New, 10pt.")
+            # --- End Code Block Style ---
 
-        # --- Define Code Block Style ---
-        code_style_name = "CodeBlock"
-        if code_style_name not in doc.styles:
-            code_style = doc.styles.add_style(code_style_name, WD_STYLE_TYPE.PARAGRAPH)
-            # Base on 'No Spacing' if it exists for minimal vertical space, else 'Normal'
-            base_style_name = "No Spacing" if "No Spacing" in doc.styles else "Normal"
-            code_style.base_style = doc.styles[base_style_name]
-            code_style.font.name = "Courier New"  # Monospace font
-            code_style.font.size = Pt(10)  # Slightly smaller size often looks good
-            # Optional: Add indentation or borders
-            # code_style.paragraph_format.left_indent = Inches(0.25)
-            # Optional: Adjust spacing if needed (base style might handle it)
-            # code_style.paragraph_format.space_before = Pt(6)
-            # code_style.paragraph_format.space_after = Pt(6)
-            logging.info(
-                f"Defined '{code_style_name}' style based on '{base_style_name}'."
-            )
-        else:
-            # Ensure existing style uses monospace font
-            existing_code_style = doc.styles[code_style_name]
-            existing_code_style.font.name = "Courier New"
-            existing_code_style.font.size = Pt(10)
-            logging.info(f"Ensured '{code_style_name}' style uses Courier New, 10pt.")
-        # --- End Code Block Style ---
-
-        logging.info("Styles configured.")
-    except Exception as e:
-        logging.error(f"Error setting up styles: {e}")
+            logging.info("Styles configured.")
+        except Exception as e:
+            logging.error(f"Error setting up styles: {e}")
+    else:
+        logging.info("Skipping programmatic style creation since a template was used.")
 
     # --- Page Setup (Initial Section - Section 0) ---
     section0 = doc.sections[0]
