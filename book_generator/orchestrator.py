@@ -76,22 +76,24 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
 
     # 4. Write each chapter.
     logging.info("--- Generating Fiction Chapter Content ---")
-    chapter_outline_str = "\n".join(
-        [f"{i+1}. {c['title']}: {c['summary']}" for i, c in enumerate(chapters)]
-    )
     body_matter = {}
     previous_chapter_title = ""
     previous_chapter_summary = ""
     previous_chapter_content = ""
+    previous_chapters_summaries = []
 
     for i, chapter in enumerate(chapters):
         chapter_title = chapter.get("title")
         chapter_summary = chapter.get("summary")
         logging.info(f"--- Generating Content for Chapter {i+1}: {chapter_title} ---")
 
+        previous_chapters_summary_str = "\n".join(previous_chapters_summaries)
+        if not previous_chapters_summary_str:
+            previous_chapters_summary_str = "This is the first chapter."
+
         chapter_content = generate_fiction_chapter_content(
             config,
-            chapter_outline_str,
+            previous_chapters_summary_str,
             previous_chapter_title,
             previous_chapter_content,
             chapter_title,
@@ -105,6 +107,11 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
         previous_chapter_title = chapter_title
         previous_chapter_summary = chapter_summary
         previous_chapter_content = chapter_content
+        if chapter_title and chapter_summary:
+            summary_entry = (
+                f"Chapter {i + 1} ('{chapter_title}'): {chapter_summary.strip()}"
+            )
+            previous_chapters_summaries.append(summary_entry)
 
     summary_parts = []
     for i, chapter in enumerate(chapters):
