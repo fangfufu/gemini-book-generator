@@ -425,12 +425,12 @@ def run_generation_process():
     logging.info("Starting book generation process...")
     start_time = time.time()
     config = load_config()
+    setup_environment()
 
     api_settings = config.get("api_settings", {})
 
     api_provider = api_settings.get("provider", "gemini")
     if api_provider == "gemini":
-        setup_environment()
         logging.info("Gemini API provider configured.")
     elif api_provider == "ollama":
         ollama_settings = config.get("ollama_settings", {})

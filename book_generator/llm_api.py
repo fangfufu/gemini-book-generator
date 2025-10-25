@@ -341,7 +341,10 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
             logging.debug(
                 f"Loading tokenizer: {tokenizer_model_name} for Ollama prompt token count."
             )
-            tokenizer = AutoTokenizer.from_pretrained(tokenizer_model_name)
+            hugging_face_token = os.getenv("HF_TOKEN")
+            tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer_model_name, token=hugging_face_token
+            )
             token_ids = tokenizer.encode(prompt)
             num_tokens = len(token_ids)
             logging.info(
