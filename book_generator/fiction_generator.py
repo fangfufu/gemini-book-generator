@@ -92,7 +92,7 @@ Output in British English.
 
 def generate_fiction_chapter_content(
     config,
-    chapter_outline,
+    previous_chapters_summary,
     previous_chapter_title,
     previous_chapter_content,
     chapter_title,
@@ -111,9 +111,9 @@ Avoid repeating the structure and content of the previous chapter.
 
 Here is the context for your writing:
 
---- Chapter Outline ---
-{chapter_outline}
---- End Chapter Outline ---
+--- Summary of Previous Chapters ---
+{previous_chapters_summary}
+--- End Summary of Previous Chapters ---
 
 --- Previous Chapter ---
 Title: {previous_chapter_title}
