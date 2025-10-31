@@ -294,13 +294,9 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
 
     base_url = ollama_config.get("base_url", "http://localhost:11434")
     model_name = ollama_config.get("model", "llama3")  # Default Ollama model
-    temperature = float(ollama_config.get("temperature", 0.7))
     tokenizer_model_name = ollama_config.get(
         "tokenizer_model", "NousResearch/Llama-3-8B-Instruct-hf"
     )  # Default Llama3 tokenizer
-    context_window_size = ollama_config.get(
-        "context_window_size", None
-    )  # Default to None if not specified
 
     max_retries = int(ollama_config.get("max_retries", default_max_retries))
     retry_delay = int(ollama_config.get("retry_delay_seconds", default_retry_delay))
@@ -314,26 +310,44 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
         verbose_debug  # Specifically for Ollama streaming if verbose_debug is on
     )
 
+    # Prepare payload, starting with basic info
     payload = {
         "model": model_name,
         "prompt": prompt,
         "stream": stream_ollama,
-        "options": {
-            "temperature": temperature,
-            # num_ctx will be added below if specified
-        },
+        "options": {},  # Initialize empty options
     }
 
-    if context_window_size is not None:
-        try:
-            payload["options"]["num_ctx"] = int(context_window_size)
-            logging.info(
-                f"Ollama context window size (num_ctx) set to: {payload['options']['num_ctx']}"
-            )
-        except ValueError:
-            logging.error(
-                f"Invalid 'context_window_size' value: {context_window_size}. It must be an integer. Using Ollama's default."
-            )
+    # Get all llm_options from the config
+    llm_options = ollama_config.get("llm_options", {})
+    if llm_options:
+        logging.info(f"Applying Ollama llm_options: {llm_options}")
+        # Iterate through the provided llm_options and add them to the payload's options
+        for key, value in llm_options.items():
+            if value is not None:  # Ensure not to add keys with None value
+                payload["options"][key] = value
+                logging.debug(f"Set Ollama option '{key}': {value}")
+
+    # For backward compatibility, check for standalone temperature if not in llm_options
+    if "temperature" not in payload["options"] and "temperature" in ollama_config:
+        payload["options"]["temperature"] = float(ollama_config["temperature"])
+        logging.info(
+            f"Applying standalone 'temperature' setting: {payload['options']['temperature']}"
+        )
+
+    # For backward compatibility, handle standalone context_window_size
+    if "num_ctx" not in payload["options"] and "context_window_size" in ollama_config:
+        context_window_size = ollama_config.get("context_window_size")
+        if context_window_size is not None:
+            try:
+                payload["options"]["num_ctx"] = int(context_window_size)
+                logging.info(
+                    f"Applying standalone 'context_window_size' as num_ctx: {payload['options']['num_ctx']}"
+                )
+            except (ValueError, TypeError):
+                logging.error(
+                    f"Invalid 'context_window_size' value: {context_window_size}. It must be an integer. Ignoring."
+                )
 
     if verbose_debug:
         logging.info(f"Ollama API Prompt for model '{model_name}':\n{prompt}")
