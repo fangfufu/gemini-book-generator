@@ -25,6 +25,7 @@ from book_generator.common_generator import (
     generate_writing_tone,
     is_book_non_fiction,
     save_summary_to_markdown,
+    update_character_list,
 )
 from book_generator.fiction_generator import (
     generate_overall_story,
@@ -49,21 +50,23 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
     book_title = generation_params.get("book_title")
     writing_tone = generation_params.get("writing_tone")
 
-    # 1. Create a list of characters.
-    logging.info("--- Generating Character List ---")
-    character_list = generate_character_list(config, book_title)
-    character_context_for_prompts = format_character_list_for_prompt(character_list)
-
-    # 2. Create an overall story based on the prompt.
+    # 1. Create an overall story based on the prompt.
     logging.info("--- Generating Overall Story ---")
-    overall_story = generate_overall_story(config, character_context_for_prompts, writing_tone)
+    overall_story = generate_overall_story(config, writing_tone=writing_tone)
     if not overall_story:
         logging.critical("Fatal: Failed to generate the overall story. Exiting.")
         sys.exit(1)
 
+    # 2. Create a list of characters.
+    logging.info("--- Generating Character List ---")
+    character_list = generate_character_list(
+        config, book_title, overall_story=overall_story
+    )
+
     # 3. Break down the story into chapters.
     logging.info("--- Generating Fiction Chapter Outline (Titles and Summaries) ---")
     fiction_chapter_count = generation_params.get("fiction_chapter_count", 20)
+    character_context_for_prompts = format_character_list_for_prompt(character_list)
     chapters = generate_fiction_chapter_outline(
         config,
         overall_story,
@@ -92,6 +95,9 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
         if not previous_chapters_summary_str:
             previous_chapters_summary_str = "This is the first chapter."
 
+        character_context_for_prompts = format_character_list_for_prompt(
+            character_list
+        )
         chapter_content = generate_fiction_chapter_content(
             config,
             previous_chapters_summary_str,
@@ -120,6 +126,12 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
                 logging.warning(
                     f"Failed to generate a new summary for chapter '{chapter_title}'. Falling back to the original summary."
                 )
+            # --- Update Character List ---
+            logging.info(f"--- Updating Character List after Chapter {i+1} ---")
+            character_list = update_character_list(
+                config, character_list, chapter_content
+            )
+            # --- End Character List Update ---
         else:
             logging.warning(
                 f"Skipping summary generation for chapter '{chapter_title}' due to content generation failure."

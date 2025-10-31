@@ -372,7 +372,7 @@ Answer with only 'yes' or 'no'. Do not add any explanations, quotation marks, or
     return determined_is_non_fiction
 
 
-def generate_character_list(config, book_title):
+def generate_character_list(config, book_title, overall_story=""):
     """
     Generates a list of character names and descriptions based on book details,
     if enabled in the config or if the book is determined to be fiction.
@@ -425,7 +425,23 @@ def generate_character_list(config, book_title):
         gen_params["character_list"] = None
         return None
 
-    prompt = f"""
+    if overall_story:
+        prompt = f"""
+Based on the following overall story:
+--- STORY START ---
+{overall_story}
+--- STORY END ---
+
+Generate a long list of characters who appear in this story.
+For each character, provide their full name and a brief description
+of their role, personality, or significance within the story.
+Do not use words that express uncertainty in the description. Do not use words such as "likely" or "potentially"
+
+Format the output as a Markdown bulleted list. Each character should be an item.
+Start the item with the character's name in bold, followed by a colon, and then the description.
+"""
+    else:
+        prompt = f"""
 Based on the book titled '{book_title}', which has the main topic '{main_topic}',
 a setting described as: "{setting}".
 
@@ -436,6 +452,16 @@ Do not use words that express uncertainty in the description. Do not use words s
 
 Format the output as a Markdown bulleted list. Each character should be an item.
 Start the item with the character's name in bold, followed by a colon, and then the description.
+"""
+
+    prompt += """
+Example:
+*   **Character Name One:** A brief description of this character's role or significance.
+*   **Another Character:** Their description and connection to the concepts.
+
+Provide *only* the Markdown list of characters. Do not add introductory text like "Here is the character list:".
+Output in British English.
+"""
 
 Example:
 *   **Character Name One:** A brief description of this character's role or significance.
@@ -516,6 +542,78 @@ def format_character_list_for_prompt(character_list):
         + "\n"
         + "Not all potential characters have to be used."
     )
+
+
+def update_character_list(config, character_list, chapter_content):
+    """
+    Updates the character list based on the content of the latest chapter.
+    """
+    logging.info("Updating character list...")
+
+    character_context = format_character_list_for_prompt(character_list)
+
+    prompt = f"""
+Given the following existing list of characters:
+{character_context}
+
+And the following chapter content:
+--- CHAPTER CONTENT START ---
+{chapter_content}
+--- CHAPTER CONTENT END ---
+
+Update the character list based on the chapter content.
+- If a new character is introduced, add them to the list with a description.
+- If an existing character's description needs to be updated, modify it.
+- If a character is not mentioned, keep them in the list as is.
+
+Format the output as a Markdown bulleted list. Each character should be an item.
+Start the item with the character's name in bold, followed by a colon, and then the description.
+
+Example:
+*   **Character Name One:** An updated or new description.
+*   **New Character:** A description of this newly introduced character.
+
+Provide *only* the Markdown list of characters. Do not add introductory text.
+Output in British English.
+"""
+
+    updated_character_list_text = call_llm_api(
+        prompt, config, cache_prefix="update_character_list"
+    )
+
+    if updated_character_list_text:
+        cleaned_text = updated_character_list_text.strip()
+        characters = []
+        for line in cleaned_text.split("\n"):
+            line = line.strip()
+            match = re.match(r"^\*\s*\*\*(.*?)\*\*:\s*(.*)", line)
+            if match:
+                name = match.group(1).strip()
+                description = match.group(2).strip()
+                if name and description:
+                    characters.append({"name": name, "description": description})
+            elif line.startswith("* "):
+                parts = line[2:].split(":", 1)
+                if len(parts) == 2 and parts[0].strip():
+                    name = parts[0].strip()
+                    description = parts[1].strip()
+                    characters.append({"name": name, "description": description})
+
+        if characters:
+            logging.info(
+                f"Successfully updated and parsed {len(characters)} characters."
+            )
+            gen_params = config.get("generation_params", {})
+            gen_params["character_list"] = characters
+            return characters
+        else:
+            logging.error(
+                f"Could not parse updated character list from API response. Response:\n{cleaned_text}"
+            )
+            return character_list
+    else:
+        logging.error("Failed to update character list via API.")
+        return character_list
 
 
 
