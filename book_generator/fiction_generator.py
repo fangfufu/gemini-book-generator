@@ -300,7 +300,7 @@ The following is the full text of a chapter titled '{chapter_title}'.
 {chapter_content}
 --- CHAPTER CONTENT END ---
 
-Your task is to summarize this chapter in a single, concise paragraph.
+Your task is to summarize this chapter in a short paragraph.
 The summary should capture the key events, character developments, and plot advancements.
 The writing tone for the summary should be: {writing_tone}.
 
