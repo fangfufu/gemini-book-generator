@@ -105,9 +105,6 @@ def generate_fiction_chapter_content(
 
     prompt = f"""
 You are a fiction writer. Your task is to write a single chapter of a book.
-The chapter must logically and narratively continue from the previous chapter.
-It must also align with the overall story of the book.
-Avoid repeating the structure and content of the previous chapter.
 
 Here is the context for your writing:
 
@@ -135,6 +132,8 @@ Based on all the context provided, write the full content of the current chapter
 The chapter should be approximately 2000 words long.
 
 Instructions:
+- The chapter must logically and narratively continue from the previous chapter.
+- Avoid repeating the structure and content of the previous chapter.
 - Output *only* the text content for this chapter.
 - Do *not* include the main chapter title in the output itself. Start directly with the chapter's content.
 - Format the output using standard Markdown (paragraphs, lists, bold, italics).

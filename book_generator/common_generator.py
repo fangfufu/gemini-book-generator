@@ -429,7 +429,7 @@ def generate_character_list(config, book_title):
 Based on the book titled '{book_title}', which has the main topic '{main_topic}',
 a setting described as: "{setting}".
 
-Generate a long list of characters who appear in this book.
+Generate a list of characters who appear in this book.
 For each character, provide their full name and a brief description
 of their role, personality, or significance within the context of the topic and setting.
 Do not use words that express uncertainty in the description. Do not use words such as "likely" or "potentially"
@@ -550,7 +550,7 @@ def generate_chapter_summary(
         config.get("generation_params", "").get("length_modifier", "").strip()
     )
     prompt_parts = [
-        f"Write a one-paragraph {length_modifier} short and concise summary for the chapter titled '{chapter_title}'.",
+        f"Write a one-paragraph {length_modifier} short summary for the chapter titled '{chapter_title}'.",
         f"This chapter is part of a book about '{config['generation_params']['main_topic']}'.",
         f"The setting of the book is described as: {config['generation_params']['setting']}.",
         f"{character_context}",
@@ -1012,9 +1012,8 @@ def generate_overall_summary(config, book_title, summary_context):
         return f"Placeholder overall summary for the book '{book_title}'."
 
     prompt = f"""Based *only* on the following chapter summaries for the book
-titled '{book_title}', write a short overall summary or abstract of
+titled '{book_title}', write an overall summary or abstract of
 the entire book.
-
 
 Chapter Summaries:
 {summary_context}
