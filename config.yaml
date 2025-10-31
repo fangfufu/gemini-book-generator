@@ -93,7 +93,7 @@ api_settings:
     # model: "gemma-3-27b-it"
     model: "gemini-2.5-flash"
     # temperature controls the randomness or "creativity" of the model.
-    temperature: 0.3
+    temperature: 0.4
     # To use Gemini-specific retries different from default, uncomment and set:
     max_retries: 10
     retry_delay_seconds: 60
@@ -108,7 +108,7 @@ api_settings:
     # model: "dolphin3"                    # The Ollama model you want to use
     # tokenizer_model: "meta-llama/Llama-3.1-8B" # Tokenizer for client-side counting
 
-    temperature: 0.3
+    temperature: 0.4
     # To use Ollama-specific retries different from default:
     max_retries: 10
     retry_delay_seconds: 5

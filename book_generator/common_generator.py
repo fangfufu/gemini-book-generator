@@ -196,12 +196,12 @@ def generate_writing_tone(config, is_fiction=False):
         logging.error(
             "Cannot generate specific writing tone without 'main_topic' and 'setting'. Using a generic prompt."
         )
-        prompt = f"""Generate some words describing a suitable writing tone
+        prompt = f"""Generate a few words describing a suitable writing tone
 for {genre_prompt_part}. Output only the phrase describing the tone. Do not add introductory
 text. Output in British English."""
     else:
         prompt = f"""Based on the main topic '{main_topic}', a setting described as:
-"{setting}", generate some words describing the most suitable writing tone for {genre_prompt_part} exploring this
+"{setting}", generate a few words describing the most suitable writing tone for {genre_prompt_part} exploring this
 topic. Output *only* the phrase describing the tone. Do not add introductory
 text. Output in British English."""
     tone_text = call_llm_api(prompt, config, cache_prefix="writing_tone")
