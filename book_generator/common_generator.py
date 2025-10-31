@@ -544,6 +544,28 @@ def format_character_list_for_prompt(character_list):
     )
 
 
+def format_location_list_for_prompt(location_list):
+    """Formats the location list into a string suitable for API prompts."""
+    if not location_list or not isinstance(location_list, list):
+        return ""  # Return empty string if no locations
+
+    formatted_items = []
+    for loc in location_list:
+        if isinstance(loc, dict) and "name" in loc and "description" in loc:
+            formatted_items.append(f"- {loc['name']}: {loc['description']}")
+        # Add handling for other potential formats if needed
+
+    if not formatted_items:
+        return ""
+
+    return (
+        "Potential locations:\n"
+        + "\n".join(formatted_items)
+        + "\n"
+        + "Not all potential locations have to be used."
+    )
+
+
 def update_character_list(config, character_list, chapter_content):
     """
     Updates the character list based on the content of the latest chapter.
