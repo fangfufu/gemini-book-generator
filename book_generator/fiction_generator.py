@@ -148,3 +148,36 @@ Instructions:
         if content
         else f"**Content generation failed for Chapter '{chapter_title}'.**"
     )
+
+
+def summarize_fiction_chapter(config, chapter_title, chapter_content, writing_tone=""):
+    """Summarizes the content of a fiction chapter."""
+    logging.info(f"Summarizing content for chapter '{chapter_title}'...")
+
+    prompt = f"""
+The following is the full text of a chapter titled '{chapter_title}'.
+--- CHAPTER CONTENT START ---
+{chapter_content}
+--- CHAPTER CONTENT END ---
+
+Your task is to summarize this chapter in a single, concise paragraph.
+The summary should capture the key events, character developments, and plot advancements.
+The writing tone for the summary should be: {writing_tone}.
+
+Output only the summary paragraph. Do not add any introductory text.
+Output in British English.
+"""
+    cache_prefix = (
+        f"fiction_summary_{sanitize_filename(chapter_title, max_length=40)}"
+    )
+    summary = call_llm_api(prompt, config, cache_prefix=cache_prefix)
+
+    if summary:
+        cleaned_summary = summary.strip()
+        if cleaned_summary:
+            logging.info(
+                f"Successfully generated summary for chapter '{chapter_title}'."
+            )
+            return cleaned_summary
+    logging.error(f"Failed to generate summary for chapter '{chapter_title}'.")
+    return None

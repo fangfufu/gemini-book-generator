@@ -30,6 +30,7 @@ from book_generator.fiction_generator import (
     generate_overall_story,
     generate_fiction_chapter_outline,
     generate_fiction_chapter_content,
+    summarize_fiction_chapter,
 )
 from book_generator.non_fiction_generator import (
     generate_chapter_outline,
@@ -103,6 +104,27 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
         )
 
         body_matter[chapter_title] = [{"title": "", "content": chapter_content}]
+
+        # --- Summarize the generated content ---
+        if chapter_content and "Content generation failed" not in chapter_content:
+            new_summary = summarize_fiction_chapter(
+                config, chapter_title, chapter_content, writing_tone
+            )
+            if new_summary:
+                logging.info(
+                    f"Successfully summarized chapter '{chapter_title}' based on its content."
+                )
+                # Replace the original summary with the new, more accurate one
+                chapter_summary = new_summary
+            else:
+                logging.warning(
+                    f"Failed to generate a new summary for chapter '{chapter_title}'. Falling back to the original summary."
+                )
+        else:
+            logging.warning(
+                f"Skipping summary generation for chapter '{chapter_title}' due to content generation failure."
+            )
+        # --- End summarization ---
 
         previous_chapter_title = chapter_title
         previous_chapter_summary = chapter_summary
