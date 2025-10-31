@@ -11,6 +11,7 @@ from book_generator.constants import DEFAULT_WRITING_TONE
 from book_generator.common_generator import (
     determine_gender_from_name,
     format_character_list_for_prompt,
+    format_location_list_for_prompt,
     generate_back_matter,
     generate_book_blurb,
     generate_book_title,
@@ -32,6 +33,8 @@ from book_generator.fiction_generator import (
     generate_fiction_chapter_outline,
     generate_fiction_chapter_content,
     summarize_fiction_chapter,
+    generate_location_list,
+    update_location_list,
 )
 from book_generator.non_fiction_generator import (
     generate_chapter_outline,
@@ -63,7 +66,11 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
         config, book_title, overall_story=overall_story
     )
 
-    # 3. Break down the story into chapters.
+    # 3. Create a list of locations.
+    logging.info("--- Generating Location List ---")
+    location_list = generate_location_list(config, overall_story)
+
+    # 4. Break down the story into chapters.
     logging.info("--- Generating Fiction Chapter Outline (Titles and Summaries) ---")
     fiction_chapter_count = generation_params.get("fiction_chapter_count", 20)
     character_context_for_prompts = format_character_list_for_prompt(character_list)
@@ -98,6 +105,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
         character_context_for_prompts = format_character_list_for_prompt(
             character_list
         )
+        location_context_for_prompts = format_location_list_for_prompt(location_list)
         chapter_content = generate_fiction_chapter_content(
             config,
             previous_chapters_summary_str,
@@ -106,6 +114,7 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
             chapter_title,
             chapter_summary,
             character_context_for_prompts,
+            location_context_for_prompts,
             writing_tone,
         )
 
@@ -132,6 +141,12 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
                 config, character_list, chapter_content
             )
             # --- End Character List Update ---
+            # --- Update Location List ---
+            logging.info(f"--- Updating Location List after Chapter {i+1} ---")
+            location_list = update_location_list(
+                config, location_list, chapter_content
+            )
+            # --- End Location List Update ---
         else:
             logging.warning(
                 f"Skipping summary generation for chapter '{chapter_title}' due to content generation failure."

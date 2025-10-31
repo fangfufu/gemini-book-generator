@@ -97,6 +97,7 @@ def generate_fiction_chapter_content(
     chapter_title,
     chapter_summary,
     character_context="",
+    location_context="",
     writing_tone="",
 ):
     """Generates the content for a single fiction chapter."""
@@ -124,6 +125,9 @@ Summary: {chapter_summary}
 
 {character_context}
 
+Locations:
+{location_context}
+
 Writing Tone: {writing_tone}
 
 Based on all the context provided, write the full content of the current chapter.
@@ -145,6 +149,145 @@ Instructions:
         if content
         else f"**Content generation failed for Chapter '{chapter_title}'.**"
     )
+
+
+def generate_location_list(config, overall_story):
+    """
+    Generates a list of locations based on the overall story.
+    """
+    logging.info("Attempting to generate location list...")
+
+    if not overall_story:
+        logging.error("Cannot generate location list: 'overall_story' is missing. Skipping.")
+        return None
+
+    prompt = f"""
+Based on the following overall story:
+--- STORY START ---
+{overall_story}
+--- STORY END ---
+
+Generate a list of locations that appear in this story.
+For each location, provide its name and a brief description of its significance within the story.
+
+Format the output as a Markdown bulleted list. Each location should be an item.
+Start the item with the location's name in bold, followed by a colon, and then the description.
+
+Example:
+*   **Location Name One:** A brief description of this location's role or significance.
+*   **Another Location:** Its description and connection to the story.
+
+Provide *only* the Markdown list of locations. Do not add introductory text.
+Output in British English.
+"""
+
+    location_list_text = call_llm_api(prompt, config, cache_prefix="location_list")
+
+    if location_list_text:
+        cleaned_text = location_list_text.strip()
+        locations = []
+        for line in cleaned_text.split("\n"):
+            line = line.strip()
+            match = re.match(r"^\*\s*\*\*(.*?)\*\*:\s*(.*)", line)
+            if match:
+                name = match.group(1).strip()
+                description = match.group(2).strip()
+                if name and description:
+                    locations.append({"name": name, "description": description})
+            elif line.startswith("* "):
+                parts = line[2:].split(":", 1)
+                if len(parts) == 2 and parts[0].strip():
+                    name = parts[0].strip()
+                    description = parts[1].strip()
+                    locations.append({"name": name, "description": description})
+
+        if locations:
+            logging.info(
+                f"Successfully generated and parsed {len(locations)} locations."
+            )
+            return locations
+        else:
+            logging.error(
+                f"Could not parse location list from API response. Response:\n{cleaned_text}"
+            )
+            return None
+    else:
+        logging.error("Failed to generate location list via API.")
+        return None
+
+
+def update_location_list(config, location_list, chapter_content):
+    """
+    Updates the location list based on the content of the latest chapter.
+    """
+    logging.info("Updating location list...")
+
+    location_context = ""
+    if location_list:
+        location_context = "\n".join(
+            [f"- {loc['name']}: {loc['description']}" for loc in location_list]
+        )
+
+    prompt = f"""
+Given the following existing list of locations:
+{location_context}
+
+And the following chapter content:
+--- CHAPTER CONTENT START ---
+{chapter_content}
+--- CHAPTER CONTENT END ---
+
+Update the location list based on the chapter content.
+- If a new location is introduced, add it to the list with a description.
+- If an existing location's description needs to be updated, modify it.
+- If a location is not mentioned, keep it in the list as is.
+
+Format the output as a Markdown bulleted list. Each location should be an item.
+Start the item with the location's name in bold, followed by a colon, and then the description.
+
+Example:
+*   **Location Name One:** An updated or new description.
+*   **New Location:** A description of this newly introduced location.
+
+Provide *only* the Markdown list of locations. Do not add introductory text.
+Output in British English.
+"""
+
+    updated_location_list_text = call_llm_api(
+        prompt, config, cache_prefix="update_location_list"
+    )
+
+    if updated_location_list_text:
+        cleaned_text = updated_location_list_text.strip()
+        locations = []
+        for line in cleaned_text.split("\n"):
+            line = line.strip()
+            match = re.match(r"^\*\s*\*\*(.*?)\*\*:\s*(.*)", line)
+            if match:
+                name = match.group(1).strip()
+                description = match.group(2).strip()
+                if name and description:
+                    locations.append({"name": name, "description": description})
+            elif line.startswith("* "):
+                parts = line[2:].split(":", 1)
+                if len(parts) == 2 and parts[0].strip():
+                    name = parts[0].strip()
+                    description = parts[1].strip()
+                    locations.append({"name": name, "description": description})
+
+        if locations:
+            logging.info(
+                f"Successfully updated and parsed {len(locations)} locations."
+            )
+            return locations
+        else:
+            logging.error(
+                f"Could not parse updated location list from API response. Response:\n{cleaned_text}"
+            )
+            return location_list
+    else:
+        logging.error("Failed to update location list via API.")
+        return location_list
 
 
 def summarize_fiction_chapter(config, chapter_title, chapter_content, writing_tone=""):
