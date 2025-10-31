@@ -122,7 +122,6 @@ Title: {chapter_title}
 Summary: {chapter_summary}
 --- End Current Chapter ---
 
-Characters:
 {character_context}
 
 Writing Tone: {writing_tone}

@@ -436,6 +436,7 @@ Generate a list of characters who appear in this story.
 For each character, provide their full name and a brief description
 of their role, personality, or significance within the story.
 Do not use words that express uncertainty in the description. Do not use words such as "likely" or "potentially"
+Do not generate unamed characters. For characters who do not have names, invent names.
 
 Format the output as a Markdown bulleted list. Each character should be an item.
 Start the item with the character's name in bold, followed by a colon, and then the description.
@@ -448,6 +449,7 @@ a setting described as: "{setting}".
 Generate a list of characters who appear in this book.
 For each character, provide their full name and a brief description
 of their role, personality, or significance within the context of the topic and setting.
+Do not generate unamed characters. For characters who do not have names, invent names.
 Do not use words that express uncertainty in the description. Do not use words such as "likely" or "potentially"
 
 Format the output as a Markdown bulleted list. Each character should be an item.
