@@ -74,10 +74,12 @@ def run_generation_process_fiction(config, output_base_dir, equation_image_dir):
     logging.info("--- Generating Fiction Chapter Outline (Titles and Summaries) ---")
     fiction_chapter_count = generation_params.get("fiction_chapter_count", 20)
     character_context_for_prompts = format_character_list_for_prompt(character_list)
+    location_context_for_prompts = format_location_list_for_prompt(location_list)
     chapters = generate_fiction_chapter_outline(
         config,
         overall_story,
         character_context_for_prompts,
+        location_context_for_prompts,
         fiction_chapter_count,
         writing_tone,
     )
