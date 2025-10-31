@@ -9,7 +9,7 @@ from book_generator.llm_api import call_llm_api
 from book_generator.utils import sanitize_filename
 
 
-def generate_overall_story(config, character_context="", writing_tone=""):
+def generate_overall_story(config, writing_tone=""):
     """Generates the overall story for a fiction book."""
     logging.info("Generating overall story...")
     main_topic = config.get("generation_params", {}).get("main_topic", "[No Main Topic Provided]")
@@ -17,8 +17,7 @@ def generate_overall_story(config, character_context="", writing_tone=""):
 
     prompt = f"""
 Based on the main topic '{main_topic}', a setting described as:
-"{setting}", and the following characters:
-{character_context}
+"{setting}".
 
 Write a  detailed overall story of about 2000 words. This story will serve as the master plot for the entire book.
 The story should have a clear beginning, middle, and end.
