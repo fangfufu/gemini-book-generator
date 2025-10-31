@@ -432,7 +432,7 @@ Based on the following overall story:
 {overall_story}
 --- STORY END ---
 
-Generate a long list of characters who appear in this story.
+Generate a list of characters who appear in this story.
 For each character, provide their full name and a brief description
 of their role, personality, or significance within the story.
 Do not use words that express uncertainty in the description. Do not use words such as "likely" or "potentially"
@@ -462,15 +462,6 @@ Example:
 Provide *only* the Markdown list of characters. Do not add introductory text like "Here is the character list:".
 Output in British English.
 """
-
-Example:
-*   **Character Name One:** A brief description of this character's role or significance.
-*   **Another Character:** Their description and connection to the concepts.
-
-Provide *only* the Markdown list of characters. Do not add introductory text like "Here is the character list:".
-Output in British English.
-"""
-
     character_list_text = call_llm_api(prompt, config, cache_prefix="character_list")
 
     if character_list_text:
