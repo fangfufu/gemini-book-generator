@@ -3,16 +3,78 @@ import json
 import logging
 import os
 import pathlib
+
+
+def _check_for_repetition(
+    current_text,
+    repetition_check_config,
+    full_response_text_parts_for_check=None,
+):
+    """
+    Checks for repeated sentences or paragraphs in the generated text.
+
+    Args:
+        current_text (str): The current chunk of text from the LLM stream.
+        repetition_check_config (dict): Configuration for repetition checks.
+        full_response_text_parts_for_check (list, optional): A list containing
+            the history of text parts for more robust checking. Defaults to None.
+
+    Returns:
+        bool: True if a repetition is detected, False otherwise.
+    """
+    min_sentence_length = repetition_check_config.get(
+        "min_sentence_length_for_repetition_check", 10
+    )
+    max_history_size = repetition_check_config.get("max_history_size", 5)
+
+    # Check 1: Exact repetition of the current chunk in the history
+    if (
+        full_response_text_parts_for_check is not None
+        and len(current_text) > min_sentence_length
+    ):
+        # Count occurrences of the current chunk in the recent history
+        recent_history = full_response_text_parts_for_check[-max_history_size:]
+        if recent_history.count(current_text) > 1:
+            logging.warning(
+                f"Repetition detected (exact chunk): Found chunk '{current_text}' multiple times in recent history."
+            )
+            return True
+
+    # Check 2: Repetition of sentences using the full text
+    # This check is more expensive, so it's done on the accumulated text
+    full_text = "".join(full_response_text_parts_for_check or [])
+    if len(full_text) < min_sentence_length * 2:  # Not enough text to check
+        return False
+
+    # Simple sentence tokenization
+    sentences = [
+        s.strip() for s in full_text.replace("!", ".").replace("?", ".").split(".") if s
+    ]
+    long_sentences = [s for s in sentences if len(s) > min_sentence_length]
+
+    if len(long_sentences) > len(set(long_sentences)):
+        # Find the repeated sentence for logging purposes
+        seen = set()
+        for sentence in long_sentences:
+            if sentence in seen:
+                logging.warning(
+                    f"Repetition detected (sentence): Sentence '{sentence}' is repeated."
+                )
+                return True
+            seen.add(sentence)
+
+    return False
 import sys
 import time
 
-from google.genai.types import GenerateContentConfig
-import google.genai as genai
+from google.generativeai.types import GenerationConfig
+import google.generativeai as genai
 import requests
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
 
 from book_generator.utils import sanitize_filename
+from book_generator.constants import REPETITION_DETECTED
 
 
 def setup_environment():
@@ -127,8 +189,8 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
             # logging.info(f"Gemini API Prompt for model '{model_name}' (first 500 chars):\n{prompt[:500]}...")
 
         client = genai.Client()
-        generation_config = GenerateContentConfig(
-            temperature=temperature, safety_settings=safety_settings
+        generation_config = GenerationConfig(
+            temperature=temperature
         )
 
         # Count tokens for Gemini prompt
@@ -164,33 +226,48 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                 if stream_gemini:
                     logging.info(f"Streaming Gemini response for model '{model_name}':")
                     full_response_text_parts = []
+                    repetition_check_config = config.get(
+                        "repetition_check", {"enabled": False}
+                    )
                     print(f"\n--- Gemini Stream ({model_name}) ---")
                     for chunk in response:
                         if hasattr(chunk, "text"):
                             response_part = chunk.text
-                            print(
-                                response_part, end="", flush=True
-                            )  # Stream to console
+                            print(response_part, end="", flush=True)
                             full_response_text_parts.append(response_part)
+
+                            if repetition_check_config.get("enabled", False):
+                                if _check_for_repetition(
+                                    response_part,
+                                    repetition_check_config,
+                                    full_response_text_parts,
+                                ):
+                                    logging.warning(
+                                        "Repetition detected. Terminating and retrying."
+                                    )
+                                    print(
+                                        "\n--- End Gemini Stream (Repetition Detected) ---"
+                                    )
+                                    return REPETITION_DETECTED
                         elif (
                             hasattr(chunk, "prompt_feedback")
                             and chunk.prompt_feedback
                             and chunk.prompt_feedback.block_reason
-                        ):  # Prompt itself is blocked
+                        ):
                             logging.error(
                                 f"Gemini API stream blocked. Reason: {chunk.prompt_feedback.block_reason}"
                             )
                             print(f"\n--- End Gemini Stream (Blocked) ---")
-                            return None  # Blocked, don't retry
-                        # We don't typically get 'done' in the same way as Ollama,
-                        # the stream just ends. The loop finishing means it's done.
+                            return None
 
                     print(f"\n--- End Gemini Stream (Done) ---")
                     logging.info(
                         f"Gemini API stream completed for model '{model_name}'."
                     )
                     if full_response_text_parts:
-                        final_text = "".join(str(p) for p in full_response_text_parts).strip()
+                        final_text = "".join(
+                            str(p) for p in full_response_text_parts
+                        ).strip()
                         return final_text
                     return ""
                 else:  # Not streaming
@@ -397,6 +474,9 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
             if stream_ollama:
                 logging.info(f"Streaming Ollama response for model '{model_name}':")
                 full_response_text_parts = []
+                repetition_check_config = config.get(
+                    "repetition_check", {"enabled": False}
+                )
                 print(f"\n--- Ollama Stream ({model_name}) ---")
                 for line in response.iter_lines():
                     if line:
@@ -408,13 +488,26 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                                     f"Ollama API error during stream for model '{model_name}': {chunk['error']}"
                                 )
                                 print(f"\n--- End Ollama Stream (Error) ---")
-                                return None  # Specific Ollama error, don't retry
+                                return None
 
                             response_part = chunk.get("response", "")
-                            print(
-                                response_part, end="", flush=True
-                            )  # Stream to console
+                            print(response_part, end="", flush=True)
                             full_response_text_parts.append(response_part)
+
+                            # Perform repetition check if enabled
+                            if repetition_check_config.get("enabled", False):
+                                if _check_for_repetition(
+                                    response_part,
+                                    repetition_check_config,
+                                    full_response_text_parts,
+                                ):
+                                    logging.warning(
+                                        "Repetition detected. Terminating and retrying."
+                                    )
+                                    print(
+                                        "\n--- End Ollama Stream (Repetition Detected) ---"
+                                    )
+                                    return REPETITION_DETECTED
 
                             if chunk.get("done"):
                                 print(f"\n--- End Ollama Stream (Done) ---")
@@ -429,9 +522,10 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                             )
                             print(f"\n--- End Ollama Stream (JSON Error) ---")
                             return None
-                # This part might be reached if the stream ends unexpectedly without a 'done: true'
                 print(f"\n--- End Ollama Stream (Unexpected End) ---")
-                logging.error("Ollama stream ended without a 'done: true' message.")
+                logging.warning(
+                    "Ollama stream ended without a 'done: true' message."
+                )
                 return (
                     "".join(full_response_text_parts).strip()
                     if full_response_text_parts
@@ -495,30 +589,60 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
 
 def call_llm_api(prompt, config, cache_prefix=None):
     """
-    Calls the configured LLM API (Gemini or Ollama), using caching.
+    Calls the configured LLM API (Gemini or Ollama), using caching and handling retries.
+    Includes special handling for repetition detection.
     """
-    cache_dir = config.get(
-        "cache_dir", "api_cache"
-    )  # This is now topic and model specific
+    cache_dir = config.get("cache_dir", "api_cache")
     cached_response = load_from_cache(prompt, cache_dir, cache_prefix)
     if cached_response is not None:
         return cached_response
 
     api_settings = config.get("api_settings", {})
-    api_provider = api_settings.get("provider", "gemini")  # Default to gemini
+    api_provider = api_settings.get("provider", "gemini")
     logging.info(
         f"Calling {api_provider.upper()} API... (Cache Prefix: {cache_prefix or 'None'})"
     )
 
+    max_retries_repetition = config.get("repetition_check", {}).get(
+        "max_retries_on_repetition", 2
+    )
+    repetition_retry_delay = config.get("repetition_check", {}).get(
+        "repetition_retry_delay_seconds", 5
+    )
     response_text = None
-    if api_provider == "gemini":
-        response_text = _call_gemini_api_internal(prompt, config, cache_prefix)
-    elif api_provider == "ollama":
-        response_text = _call_ollama_api_internal(prompt, config, cache_prefix)
-    else:
-        logging.error(f"Unsupported API provider: {api_provider}")
-        return None
 
-    if response_text is not None:
+    for attempt in range(max_retries_repetition + 1):
+        if api_provider == "gemini":
+            response_text = _call_gemini_api_internal(prompt, config, cache_prefix)
+        elif api_provider == "ollama":
+            response_text = _call_ollama_api_internal(prompt, config, cache_prefix)
+        else:
+            logging.error(f"Unsupported API provider: {api_provider}")
+            return None
+
+        if response_text == REPETITION_DETECTED:
+            logging.warning(
+                f"Repetition detected in response. Attempt {attempt + 1}/{max_retries_repetition + 1}."
+            )
+            if attempt < max_retries_repetition:
+                logging.info(
+                    f"Retrying after {repetition_retry_delay} seconds due to repetition..."
+                )
+                time.sleep(repetition_retry_delay)
+                # Invalidate cache for this specific prompt before retrying
+                cache_file = get_cache_path(prompt, cache_dir, cache_prefix)
+                if cache_file.exists():
+                    os.remove(cache_file)
+            else:
+                logging.error(
+                    "Max retries for repetition reached. Returning None."
+                )
+                return None
+        else:
+            # If not a repetition or another error, break the loop
+            break
+
+    if response_text is not None and response_text != REPETITION_DETECTED:
         save_to_cache(prompt, response_text, cache_dir, cache_prefix)
+
     return response_text
