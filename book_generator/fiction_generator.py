@@ -19,9 +19,9 @@ def generate_overall_story(config, writing_tone=""):
 Based on the main topic '{main_topic}', a setting described as:
 "{setting}".
 
-Write a  detailed overall story of about 2000 words. This story will serve as the master plot for the entire book.
-The story should have a clear beginning, middle, and end.
-It should introduce the main conflict, develop the plot, and provide a resolution.
+Write a detailed overall story. 
+This story will serve as the master plot for the entire book.
+Do not include chapter headings in the output.
 The writing tone should be: {writing_tone}.
 Output only the story text. Do not add introductory text.
 Output in British English.
@@ -128,13 +128,11 @@ Summary: {chapter_summary}
 
 {character_context}
 
-Locations:
 {location_context}
 
 Writing Tone: {writing_tone}
 
 Based on all the context provided, write the full content of the current chapter.
-The chapter should be approximately 2000 words long.
 
 Instructions:
 - The chapter must logically and narratively continue from the previous chapter.
@@ -156,7 +154,7 @@ Instructions:
 
 def generate_location_list(config, overall_story):
     """
-    Generates a list of locations based on the overall story.
+    Generates a list of physical locations based on the overall story.
     """
     logging.info("Attempting to generate location list...")
 
@@ -170,7 +168,7 @@ Based on the following overall story:
 {overall_story}
 --- STORY END ---
 
-Generate a list of locations that appear in this story.
+Generate a list of physical locations that appear in this story.
 For each location, provide its name and a brief description of its significance within the story.
 
 Format the output as a Markdown bulleted list. Each location should be an item.
@@ -180,7 +178,7 @@ Example:
 *   **Location Name One:** A brief description of this location's role or significance.
 *   **Another Location:** Its description and connection to the story.
 
-Provide *only* the Markdown list of locations. Do not add introductory text.
+Provide *only* the Markdown list of physical locations. Do not add introductory text.
 Output in British English.
 """
 
@@ -221,7 +219,7 @@ Output in British English.
 
 def update_location_list(config, location_list, chapter_content):
     """
-    Updates the location list based on the content of the latest chapter.
+    Updates the physical location list based on the content of the latest chapter.
     """
     logging.info("Updating location list...")
 
@@ -240,10 +238,10 @@ And the following chapter content:
 {chapter_content}
 --- CHAPTER CONTENT END ---
 
-Update the location list based on the chapter content.
-- If a new location is introduced, add it to the list with a description.
-- If an existing location's description needs to be updated, modify it.
-- If a location is not mentioned, keep it in the list as is.
+Update the physical location list based on the chapter content.
+- If a new physical location is introduced, add it to the list with a description.
+- If an existing physical location's description needs to be updated, modify it.
+- If a physical location is not mentioned, keep it in the list as is.
 
 Format the output as a Markdown bulleted list. Each location should be an item.
 Start the item with the location's name in bold, followed by a colon, and then the description.

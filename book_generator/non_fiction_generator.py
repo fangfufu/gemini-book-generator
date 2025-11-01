@@ -207,7 +207,6 @@ the topic defined by the section title ('{section_title}'). Ensure the content
 fits logically within the context provided by the current chapter summary.
 
 Instructions:
-- Write approximately 2000 words for this section.
 - Output *only* the text content for this section.
 - Do *not* include the main chapter title or the section title in the output
 itself. Start directly with the section's content.
