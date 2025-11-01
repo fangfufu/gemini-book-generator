@@ -141,6 +141,27 @@ api_settings:
     retry_delay_seconds: 1
     request_timeout_seconds: 180       # Timeout for Ollama requests (e.g., 3 minutes)
 
+# Repetition Check Settings
+# This section configures the detection and handling of repetitive content
+# from the LLM.
+repetition_check:
+  # Set to true to enable the repetition check.
+  enabled: true
+
+  # The minimum length of a sentence (in characters) to be considered for
+  # repetition checks. Shorter sentences are ignored.
+  min_sentence_length_for_repetition_check: 10
+
+  # For the exact chunk repetition check, this defines how many of the most
+  # recent text chunks are kept in history for comparison.
+  max_history_size: 5
+
+  # The number of times to retry the LLM call if a repetition is detected.
+  max_retries_on_repetition: 2
+
+  # The delay in seconds between retries when a repetition is detected.
+  repetition_retry_delay_seconds: 5
+
 style_params:
   font_name: "Cambria"
   font_size: 11

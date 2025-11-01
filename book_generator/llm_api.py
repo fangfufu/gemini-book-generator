@@ -226,9 +226,7 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                 if stream_gemini:
                     logging.info(f"Streaming Gemini response for model '{model_name}':")
                     full_response_text_parts = []
-                    repetition_check_config = config.get(
-                        "repetition_check", {"enabled": False}
-                    )
+                    repetition_check_config = config.get("repetition_check", {})
                     print(f"\n--- Gemini Stream ({model_name}) ---")
                     for chunk in response:
                         if hasattr(chunk, "text"):
@@ -474,9 +472,7 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
             if stream_ollama:
                 logging.info(f"Streaming Ollama response for model '{model_name}':")
                 full_response_text_parts = []
-                repetition_check_config = config.get(
-                    "repetition_check", {"enabled": False}
-                )
+                repetition_check_config = config.get("repetition_check", {})
                 print(f"\n--- Ollama Stream ({model_name}) ---")
                 for line in response.iter_lines():
                     if line:
@@ -603,10 +599,11 @@ def call_llm_api(prompt, config, cache_prefix=None):
         f"Calling {api_provider.upper()} API... (Cache Prefix: {cache_prefix or 'None'})"
     )
 
-    max_retries_repetition = config.get("repetition_check", {}).get(
+    repetition_check_config = config.get("repetition_check", {})
+    max_retries_repetition = repetition_check_config.get(
         "max_retries_on_repetition", 2
     )
-    repetition_retry_delay = config.get("repetition_check", {}).get(
+    repetition_retry_delay = repetition_check_config.get(
         "repetition_retry_delay_seconds", 5
     )
     response_text = None
