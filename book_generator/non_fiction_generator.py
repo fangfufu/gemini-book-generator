@@ -208,6 +208,7 @@ fits logically within the context provided by the current chapter summary.
 
 Instructions:
 - Output *only* the text content for this section.
+- Write about 2000 words.
 - Do *not* include the main chapter title or the section title in the output
 itself. Start directly with the section's content.
 - Format the output using standard Markdown (paragraphs, lists, bold, italics,

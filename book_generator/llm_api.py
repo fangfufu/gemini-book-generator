@@ -67,7 +67,6 @@ def _check_for_repetition(
 import sys
 import time
 
-from google.generativeai.types import GenerationConfig
 import google.generativeai as genai
 import requests
 from dotenv import load_dotenv
@@ -86,6 +85,7 @@ def setup_environment():
             "Error: GEMINI_API_KEY not found in .env file or environment variables."
         )
         sys.exit(1)
+    genai.configure(api_key=api_key)
     logging.info("Environment variables loaded and API key found.")
     return api_key
 
@@ -188,15 +188,13 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
             # For very long prompts, you might want to log only a portion or a summary
             # logging.info(f"Gemini API Prompt for model '{model_name}' (first 500 chars):\n{prompt[:500]}...")
 
-        client = genai.Client()
-        generation_config = GenerationConfig(
-            temperature=temperature
-        )
+        model = genai.GenerativeModel(model_name)
+        generation_config = {"temperature": temperature}
 
         # Count tokens for Gemini prompt
         try:
-            token_count_response = client.models.count_tokens(
-                model=model_name, contents=prompt
+            token_count_response = model.count_tokens(
+                contents=prompt
             )
             prompt_token_count = token_count_response.total_tokens
             logging.info(
@@ -211,16 +209,15 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
         for attempt in range(max_retries):
             try:
                 if stream_gemini:
-                    response = client.models.generate_content_stream(
-                        model=model_name,
+                    response = model.generate_content(
                         contents=prompt,
-                        config=generation_config,
+                        generation_config=generation_config,
+                        stream=True
                     )
                 else:
-                    response = client.models.generate_content(
-                        model=model_name,
+                    response = model.generate_content(
                         contents=prompt,
-                        config=generation_config,
+                        generation_config=generation_config,
                     )
 
                 if stream_gemini:

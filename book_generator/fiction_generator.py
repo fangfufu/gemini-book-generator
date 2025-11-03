@@ -19,7 +19,7 @@ def generate_overall_story(config, writing_tone=""):
 Based on the main topic '{main_topic}', a setting described as:
 "{setting}".
 
-Write a detailed overall story. 
+Write a detailed overall story of about 2000 words.
 This story will serve as the master plot for the entire book.
 Do not include chapter headings in the output.
 The writing tone should be: {writing_tone}.
@@ -136,6 +136,7 @@ Based on all the context provided, write the full content of the current chapter
 
 Instructions:
 - The chapter must logically and narratively continue from the previous chapter.
+- Write about 2000 words.
 - Avoid repeating the structure and content of the previous chapter.
 - Output *only* the text content for this chapter.
 - Do *not* include the main chapter title in the output itself. Start directly with the chapter's content.

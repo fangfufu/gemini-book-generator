@@ -38,7 +38,7 @@ generation_params:
   is_fiction: true
 
   # The number of chapters to generate for a fiction book.
-  fiction_chapter_count: 25
+  fiction_chapter_count: 50
 
   # Whether to autogenerate a character list. This should only be turned on when
   # you are generating a novel. If this is not set, it is automatically 
@@ -76,7 +76,7 @@ generation_params:
 # API Provider and Global Settings
 # This section groups all API related configurations.
 api_settings:
-  provider: "ollama"  # Can be "gemini" or "ollama" (Update as per your previous change)
+  provider: "gemini"  # Can be "gemini" or "ollama" (Update as per your previous change)
 
   # Default settings applicable to API calls, can be overridden by provider-specific sections.
   default_max_retries: 10
@@ -102,13 +102,13 @@ api_settings:
   # Ollama specific settings (assuming this structure from previous integration)
   ollama:
     # Your Ollama server address
-    base_url: "http://localhost:11434" 
+    base_url: "http://localhost:11434"
 
     # The Ollama model you want to use
     model: "gemma3:27b-it-qat"
 
     # Tokenizer for client-side counting      
-    tokenizer_model: "google/gemma-3-27b-it" 
+    tokenizer_model: "google/gemma-3-27b-it"
 
     # Full list of Ollama parameters that can be overriden.
     # For more details, please visit: 
