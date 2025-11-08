@@ -95,8 +95,6 @@ Output in British English.
 def generate_fiction_chapter_content(
     config,
     previous_chapters_summary,
-    previous_chapter_title,
-    previous_chapter_content,
     chapter_title,
     chapter_summary,
     character_context="",
@@ -114,12 +112,6 @@ Here is the context for your writing:
 --- Summary of Previous Chapters ---
 {previous_chapters_summary}
 --- End Summary of Previous Chapters ---
-
---- Previous Chapter ---
-Title: {previous_chapter_title}
-Content:
-{previous_chapter_content}
---- End Previous Chapter ---
 
 --- Current Chapter ---
 Title: {chapter_title}
@@ -304,7 +296,6 @@ The following is the full text of a chapter titled '{chapter_title}'.
 
 Your task is to summarize this chapter in a short paragraph.
 The summary should capture the key events, character developments, and plot advancements.
-The writing tone for the summary should be: {writing_tone}.
 
 Output only the summary paragraph. Do not add any introductory text.
 Output in British English.

@@ -25,21 +25,25 @@ def _check_for_repetition(
     min_sentence_length = repetition_check_config.get(
         "min_sentence_length_for_repetition_check", 10
     )
-    max_history_size = repetition_check_config.get("max_history_size", 5)
+
+    # Check 0: Hacky way to remove leaked tags
+    if "start_of_turn" in current_text or "end_of_turn" in current_text:
+        return True
 
     # Check 1: Exact repetition of the current chunk in the history
-    if (
-        full_response_text_parts_for_check is not None
-        and len(current_text) > min_sentence_length
-    ):
-        # Count occurrences of the current chunk in the recent history
-        recent_history = full_response_text_parts_for_check[-max_history_size:]
-        if recent_history.count(current_text) > 1:
-            logging.warning(
-                f"Repetition detected (exact chunk): Found chunk '{current_text}' multiple times in recent history."
-            )
-            return True
-
+    # max_history_size = repetition_check_config.get("max_history_size", 5)
+    # if (
+    #     full_response_text_parts_for_check is not None
+    #     and len(current_text) > min_sentence_length
+    # ):
+    #     # Count occurrences of the current chunk in the recent history
+    #     recent_history = full_response_text_parts_for_check[-max_history_size:]
+    #     if recent_history.count(current_text) > 1:
+    #         logging.warning(
+    #             f"Repetition detected (exact chunk): Found chunk '{current_text}' multiple times in recent history."
+    #         )
+    #         return True
+            
     # Check 2: Repetition of sentences using the full text
     # This check is more expensive, so it's done on the accumulated text
     full_text = "".join(full_response_text_parts_for_check or [])
@@ -263,7 +267,7 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                         final_text = "".join(
                             str(p) for p in full_response_text_parts
                         ).strip()
-                        return final_text
+                        return final_text.replace("</end_of_turn>", "").replace("</start_of_turn>", "")
                     return ""
                 else:  # Not streaming
                     response_text = None  # Initialize
@@ -307,7 +311,7 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
                         logging.info(
                             f"Gemini API call successful for model {model_name}."
                         )
-                        return response_text
+                        return response_text.replace("</end_of_turn>", "").replace("</start_of_turn>", "")
                     else:
                         logging.error(
                             f"API attempt {attempt + 1} for model {model_name} resulted in no content (response_text is None). Will proceed to retry logic."
@@ -508,7 +512,7 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                                     f"Ollama API stream completed for model '{model_name}'."
                                 )
                                 final_text = "".join(full_response_text_parts).strip()
-                                return final_text
+                                return final_text.replace("</end_of_turn>", "").replace("</start_of_turn>", "")
                         except json.JSONDecodeError:
                             logging.error(
                                 f"Error decoding JSON chunk from Ollama stream: {decoded_line}"
@@ -520,7 +524,9 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                     "Ollama stream ended without a 'done: true' message."
                 )
                 return (
-                    "".join(full_response_text_parts).strip()
+                    "".join(full_response_text_parts)
+                    .strip()
+                    .replace("</end_of_turn>", "").replace("</start_of_turn>", "")
                     if full_response_text_parts
                     else None
                 )
@@ -536,7 +542,7 @@ def _call_ollama_api_internal(prompt, config, cache_prefix=None):
                     logging.info(
                         f"Ollama API call successful for model '{model_name}'."
                     )
-                    return response_text.strip()
+                    return response_text.strip().replace("</end_of_turn>", "").replace("</start_of_turn>", "")
                 else:
                     logging.error(
                         f"Ollama API response for model '{model_name}' did not contain 'response' key. Attempt {attempt + 1}/{max_retries}. Data: {response_data}"

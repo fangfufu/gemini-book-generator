@@ -436,11 +436,9 @@ Generate a list of characters.
 For each character, provide their full name and a brief description.
 of their role, personality, or significance within the story.
 Do not use words that express uncertainty in the description.
-Do not use words such as "likely" or "potentially".
 Each character should be a unique individual.
 Do not generate character groups.
 Do not generate unamed characters.
-For characters who do not have names, invent names.
 
 Format the output as a Markdown bulleted list. Each character should be an item.
 Start the item with the character's name in bold, followed by a colon, and then the description.
