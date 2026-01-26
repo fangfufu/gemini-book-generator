@@ -68,17 +68,18 @@ def process_node_content(
     }
 
     for child in node:
-        try:
-            child_html_snippet = html.tostring(
-                child, encoding="unicode", pretty_print=False
-            )[:150]
-        except Exception:
-            child_html_snippet = f"Cannot serialize child <{child.tag}>"
-        logging.debug(
-            f"Processing child: tag=<{child.tag}>, class='{child.get('class', '')}', "
-            f"has_text='{bool(child.text)}', has_tail='{bool(child.tail)}', "
-            f"html='{child_html_snippet}...'"
-        )
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            try:
+                child_html_snippet = html.tostring(
+                    child, encoding="unicode", pretty_print=False
+                )[:150]
+            except Exception:
+                child_html_snippet = f"Cannot serialize child <{child.tag}>"
+            logging.debug(
+                f"Processing child: tag=<{child.tag}>, class='{child.get('class', '')}', "
+                f"has_text='{bool(child.text)}', has_tail='{bool(child.tail)}', "
+                f"html='{child_html_snippet}...'"
+            )
 
         node_class = child.get("class", "")
         child_tag = child.tag
