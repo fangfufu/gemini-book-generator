@@ -1461,7 +1461,6 @@ def assemble_docx(
 
         # Add subsequent paragraphs
         for cp_para in cp_paragraphs[1:]:
-            # Replace internal newlines with spaces before adding
             para_text = re.sub(r"\s*\n\s*", " ", cp_para.strip())
             p = doc.add_paragraph(para_text)
 
