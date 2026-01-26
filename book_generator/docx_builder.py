@@ -1450,7 +1450,7 @@ def assemble_docx(
         first_cp_p = doc.add_paragraph()
         first_cp_p.paragraph_format.space_before = Pt(60)
 
-        # FIX: Replace internal newlines with spaces before adding
+        # Replace internal newlines with spaces before adding
         first_para_text = re.sub(r"\s*\n\s*", " ", cp_paragraphs[0].strip())
         first_cp_p.add_run(first_para_text)
 
@@ -1461,7 +1461,7 @@ def assemble_docx(
 
         # Add subsequent paragraphs
         for cp_para in cp_paragraphs[1:]:
-            # FIX: Replace internal newlines with spaces before adding
+            # Replace internal newlines with spaces before adding
             para_text = re.sub(r"\s*\n\s*", " ", cp_para.strip())
             p = doc.add_paragraph(para_text)
 
