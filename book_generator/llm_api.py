@@ -70,6 +70,8 @@ def _check_for_repetition(
     return False
 import sys
 import time
+import threading
+from collections import deque
 
 import google.generativeai as genai
 import requests
@@ -150,6 +152,43 @@ def save_to_cache(prompt_text, response_text, cache_dir, cache_prefix=None):
 
 
 # --- LLM API Interaction ---
+
+_GEMINI_CALL_TIMESTAMPS = deque()
+_GEMINI_RATE_LIMIT_LOCK = threading.Lock()
+
+
+def _enforce_gemini_rate_limit():
+    """
+    Enforces a rate limit of less than 30 calls per minute for Gemini API.
+    """
+    global _GEMINI_CALL_TIMESTAMPS
+    # Limit to 29 calls per 60 seconds to be safe (less than 30)
+    MAX_CALLS = 29
+    TIME_WINDOW = 60.0
+
+    with _GEMINI_RATE_LIMIT_LOCK:
+        current_time = time.time()
+
+        # Remove timestamps older than TIME_WINDOW
+        while _GEMINI_CALL_TIMESTAMPS and _GEMINI_CALL_TIMESTAMPS[0] <= current_time - TIME_WINDOW:
+            _GEMINI_CALL_TIMESTAMPS.popleft()
+
+        if len(_GEMINI_CALL_TIMESTAMPS) >= MAX_CALLS:
+            # Calculate wait time based on the oldest timestamp in the current window
+            wait_time = _GEMINI_CALL_TIMESTAMPS[0] + TIME_WINDOW - current_time
+            if wait_time > 0:
+                logging.info(f"Gemini rate limit reached ({MAX_CALLS} calls/min). Sleeping for {wait_time:.2f} seconds.")
+                time.sleep(wait_time)
+                # Update current_time after sleep
+                current_time = time.time()
+
+                # Clean expired again after sleep
+                while _GEMINI_CALL_TIMESTAMPS and _GEMINI_CALL_TIMESTAMPS[0] <= current_time - TIME_WINDOW:
+                    _GEMINI_CALL_TIMESTAMPS.popleft()
+
+        _GEMINI_CALL_TIMESTAMPS.append(current_time)
+
+
 def _call_gemini_api_internal(prompt, config, cache_prefix=None):
     """
     Internal function to call the Gemini API.
@@ -197,6 +236,7 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
 
         # Count tokens for Gemini prompt
         try:
+            _enforce_gemini_rate_limit()
             token_count_response = model.count_tokens(
                 contents=prompt
             )
@@ -212,6 +252,7 @@ def _call_gemini_api_internal(prompt, config, cache_prefix=None):
 
         for attempt in range(max_retries):
             try:
+                _enforce_gemini_rate_limit()
                 if stream_gemini:
                     response = model.generate_content(
                         contents=prompt,

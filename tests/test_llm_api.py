@@ -1,5 +1,10 @@
 import unittest
 from unittest.mock import patch, MagicMock
+import sys
+
+# Mock google.generativeai before importing the module
+sys.modules["google.generativeai"] = MagicMock()
+
 from book_generator.llm_api import call_llm_api
 from book_generator.constants import REPETITION_DETECTED
 
