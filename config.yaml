@@ -76,7 +76,7 @@ generation_params:
 # API Provider and Global Settings
 # This section groups all API related configurations.
 api_settings:
-  provider: "ollama"  # Can be "gemini" or "ollama" (Update as per your previous change)
+  provider: "gemini"  # Can be "gemini" or "ollama" (Update as per your previous change)
 
   # Default settings applicable to API calls, can be overridden by provider-specific sections.
   default_max_retries: 10
@@ -91,8 +91,8 @@ api_settings:
     # At the time of writing, Gemma 3 has a Request-Per-Day (RPD) of 14,400,
     # whereas Gemini 2.5 Flash Preview has a RPD of 500. It is therefore recommended
     # to use Gemma 3 for testing purposes.
-    # model: "gemma-3-27b-it"
-    model: "gemini-2.5-flash"
+    model: "gemma-3-27b-it"
+    # model: "gemini-2.5-flash"
     # temperature controls the randomness or "creativity" of the model.
     temperature: 0.1
     # To use Gemini-specific retries different from default, uncomment and set:
