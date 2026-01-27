@@ -20,7 +20,11 @@ from book_generator.constants import (
     DEFAULT_INLINE_MATH_HEIGHT_MULTIPLIER,
     DEFAULT_WRITING_TONE,
 )
-from book_generator.utils import render_latex_to_image, sanitize_filename
+from book_generator.utils import (
+    clean_text_for_docx,
+    render_latex_to_image,
+    sanitize_filename,
+)
 
 # Helper function to apply formatting to a run
 def apply_formatting(run, bold=False, italic=False):
@@ -1450,8 +1454,7 @@ def assemble_docx(
         first_cp_p = doc.add_paragraph()
         first_cp_p.paragraph_format.space_before = Pt(60)
 
-        # Replace internal newlines with spaces before adding
-        first_para_text = re.sub(r"\s*\n\s*", " ", cp_paragraphs[0].strip())
+        first_para_text = clean_text_for_docx(cp_paragraphs[0])
         first_cp_p.add_run(first_para_text)
 
         first_cp_p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
@@ -1461,8 +1464,7 @@ def assemble_docx(
 
         # Add subsequent paragraphs
         for cp_para in cp_paragraphs[1:]:
-            # Replace internal newlines with spaces before adding
-            para_text = re.sub(r"\s*\n\s*", " ", cp_para.strip())
+            para_text = clean_text_for_docx(cp_para)
             p = doc.add_paragraph(para_text)
 
             p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT

@@ -163,3 +163,13 @@ def render_latex_to_image(
         )
         plt.close(fig)
         return None
+
+def clean_text_for_docx(text):
+    """
+    Replaces internal newlines (and surrounding whitespace) with a single space.
+    This is useful for ensuring that text content in DOCX paragraphs does not
+    have unexpected line breaks.
+    """
+    if not text:
+        return ""
+    return re.sub(r"\s*\n\s*", " ", text.strip())
